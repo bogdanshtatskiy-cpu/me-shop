@@ -2,70 +2,87 @@
 local event = require("event")
 local os = require("os")
 local gui = require("gui")
--- local me = require("me_logic") -- Раскомментируем, когда подключим сундуки
--- local network = require("network") -- Раскомментируем для Firebase
+local computer = require("computer")
 
--- Блокируем Ctrl+Alt+C (защита от взлома игроками)
 os.execute("set +c")
 
--- Тестовые данные для проверки интерфейса (потом это будет грузиться из БД)
+-- Тестовые данные
 local mock_items = {
-    { name = "Draconic Core", price = 150, stock = 12 },
-    { name = "Iridium Plate", price = 80, stock = 45 },
-    { name = "Resonant Energy Cell", price = 300, stock = 2 },
-    { name = "ME Drive", price = 50, stock = 0 }
+    { name = "Quantum Suit", price = 5000, stock = 1, category = "Броня" },
+    { name = "Iridium Plate", price = 80, stock = 45, category = "Ресурсы" },
+    { name = "ME Drive", price = 50, stock = 0, category = "Механизмы" }
 }
 
+-- Тестовые предметы на скупку
+local mock_buyback = {
+    { name = "Thorium", price = 15 },
+    { name = "Uranium", price = 25 }
+}
+
+local categories = {"ВСЕ", "Ресурсы", "Механизмы", "Броня"}
+local active_category = "ВСЕ"
 local currentUser = nil
 local running = true
 
--- Главная функция отрисовки экрана
 local function refreshScreen()
     gui.drawStatic(currentUser)
-    gui.drawItems(mock_items)
+    gui.drawCategories(categories, active_category)
+    
+    -- Фильтрация по категориям
+    local filtered = {}
+    for _, item in ipairs(mock_items) do
+        if active_category == "ВСЕ" or item.category == active_category then
+            table.insert(filtered, item)
+        end
+    end
+    
+    gui.drawItems(filtered)
+    gui.drawBuybackItems(mock_buyback)
 end
 
--- Обработка событий
-local function handleEvent(ev, address, x, y, button, player_name)
+refreshScreen()
+
+while running do
+    local ev, address, x, y, button, player_name = event.pull(0.5)
+    
     if ev == "touch" then
-        local action = gui.checkClick(x, y)
-        if not action then return end
-        
-        if action == "login" then
-            -- В OpenComputers событие touch всегда возвращает ник кликнувшего (player_name)
-            currentUser = { name = player_name, balance = 1000 }
-            refreshScreen()
-        elseif action == "logout" then
-            currentUser = nil
-            refreshScreen()
-        elseif action == "admin_panel" then
-            -- Проверка: является ли кликнувший админом?
-            -- if config.admins[player_name] then ...
-            gui.drawStatic(currentUser)
-            gui.btn("close_admin", 5, 5, 20, 3, "ЗАКРЫТЬ АДМИНКУ", gui.COLORS.bad)
-            -- Здесь будет отрисовка интерфейса регистрации предметов
-        elseif action:match("buy_") then
-            local idx = tonumber(action:match("%d+"))
-            local item = mock_items[idx]
-            -- Логика добавления в корзину или мгновенной покупки
-        elseif action == "exit" then -- Для тестов оставим возможность выйти
-            running = false
+        -- БЛОКИРОВКА СЕССИИ: Если кто-то залогинен, и это не он кликает - игнорируем
+        if currentUser and currentUser.name ~= player_name then
+            computer.beep(400, 0.1) -- Звук ошибки для "чужого"
+        else
+            local action = gui.checkClick(x, y)
+            if action then
+                computer.beep(1000, 0.05)
+                
+                if action == "login" then
+                    -- Для теста даем админку, если ник совпадает с твоим (замени на свой)
+                    local is_adm = (player_name == "ТвойНик")
+                    currentUser = { name = player_name, balance = 1000, isAdmin = is_adm }
+                    refreshScreen()
+                    
+                elseif action == "logout" then
+                    currentUser = nil
+                    active_category = "ВСЕ"
+                    refreshScreen()
+                    
+                elseif action:match("cat_") then
+                    active_category = action:gsub("cat_", "")
+                    refreshScreen()
+                    
+                elseif action == "admin_panel" then
+                    -- Переход в админку
+                    require("term").clear()
+                    print("Открыта админ панель (в разработке)")
+                    os.sleep(2)
+                    refreshScreen()
+                    
+                elseif action == "exit" then
+                    running = false
+                end
+            end
         end
     end
 end
 
--- Инициализация
-refreshScreen()
-
--- Главный цикл
-while running do
-    -- Ждем события (клик по монитору)
-    local ev, address, x, y, button, player_name = event.pull(0.5)
-    if ev then
-        handleEvent(ev, address, x, y, button, player_name)
-    end
-end
-
--- Возвращаем консоль при выходе
 require("term").clear()
-os.execute("set -c") -- Возвращаем работу Ctrl+Alt+C
+os.execute("set -c")
