@@ -8,10 +8,11 @@ me.t = nil
 me.me_net = nil 
 me.db = nil     
 
+-- Настройки сторон (твоя текущая идеальная схема)
 me.config = { 
-    chest_side = sides.up,    
-    me_side = sides.down,     
-    out_chest_side = sides.up 
+    chest_side = sides.up,    -- Левый сундук СВЕРХУ от Транспоузера
+    me_side = sides.down,     -- Левый МЭ Интерфейс СНИЗУ от Транспоузера
+    out_chest_side = sides.up -- Правый сундук СВЕРХУ от правого МЭ Интерфейса
 }
 
 function me.init()
@@ -31,7 +32,6 @@ function me.updateStock(shop_items)
 
     local lookup = {}
     for _, n_item in ipairs(net_items) do
-        -- Пытаемся зацепиться за любое доступное имя
         local key_name = n_item.name or n_item.label or "unknown"
         local key = key_name .. "_" .. (n_item.label or "")
         lookup[key] = (lookup[key] or 0) + n_item.size
@@ -102,39 +102,29 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === ФИНАЛЬНАЯ ВЫДАЧА ЧЕРЕЗ БАЗУ ДАННЫХ ===
+-- === НЕУБИВАЕМАЯ ВЫДАЧА (БЕЗ БАЗЫ ДАННЫХ) ===
 function me.buyItem(item, qty)
-    if not me.me_net or not me.db then return false, "МЭ или БД не подключены!" end
-    if not item.db_slot then return false, "Ошибка: Товар не привязан к БД! Передобавьте его в админке." end
+    if not me.me_net then return false, "МЭ Интерфейс не подключен!" end
+    if not item.id then return false, "Ошибка: У товара нет системного ID!" end
     
-    -- Берем информацию о предмете напрямую из Улучшения "База Данных"
-    local db_data = me.db.get(item.db_slot)
-    if type(db_data) ~= "table" or not db_data.name then
-        return false, "Слот БД пуст! Передобавьте товар в админке."
-    end
-    
-    -- Собираем идеальную таблицу-слепок (AE2 требует id, БД выдает name)
+    -- Формируем идеальный слепок вручную из памяти магазина
     local perfect_fingerprint = {
-        id = db_data.name,
-        damage = db_data.damage or 0
+        id = item.id,
+        damage = item.damage or 0
     }
-    
-    -- Если предмет с NBT (чар, заряд), обязательно передаем это тоже
-    if db_data.hasTag then
-        perfect_fingerprint.hasTag = true
-    end
     
     local result, reason
     local ok, err = pcall(function()
+        -- Отправляем запрос на выдачу ВВЕРХ (в правый сундук)
         result, reason = me.me_net.exportItem(perfect_fingerprint, me.config.out_chest_side, qty)
     end)
     
-    if not ok then return false, "Сбой МЭ: " .. tostring(err) end
+    if not ok then return false, "Ошибка мода: " .. tostring(err) end
     
     if type(result) == "table" and result.size and result.size > 0 then return true, "Выдано"
     elseif type(result) == "number" and result > 0 then return true, "Выдано"
     elseif result == true then return true, "Выдано"
-    else return false, tostring(reason or "Нет места в сундуке или товара в сети!") end
+    else return false, tostring(reason or "Сундук полон или товара нет в МЭ!") end
 end
 
 return me
