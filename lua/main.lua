@@ -2,6 +2,7 @@
 local component = require("component")
 local event = require("event")
 local os = require("os")
+local io = require("io")
 local unicode = require("unicode")
 local gui = require("gui")
 local computer = require("computer")
@@ -29,6 +30,24 @@ local selectedQty = 1
 local isCartMode = false
 local cart = {}
 local ed_data = {}
+
+-- === СИСТЕМА ЛОГИРОВАНИЯ ===
+local function writeLog(action, user, details)
+    -- Формируем строку лога
+    local time_str = os.date("%Y-%m-%d %H:%M:%S")
+    local log_line = string.format("[%s] %s | %s | %s", time_str, action, user, details)
+    
+    -- 1. Пишем в локальный файл
+    local f = io.open("/home/shop_logs.txt", "a")
+    if f then
+        f:write(log_line .. "\n")
+        f:close()
+    end
+    
+    -- 2. Отправляем в Firebase
+    local log_data = { time = time_str, action = action, user = user, details = details }
+    network.put("/logs/" .. os.time(), json.encode(log_data))
+end
 
 local function saveShop()
     local data = { categories = categories, items = shop_items, buyback = shop_buyback }
@@ -109,16 +128,11 @@ while true do
     end
 
     if ev == "key_down" and state == "editor" then
-        local char = arg1
-        local code = arg2
+        local char = arg1; local code = arg2
         local val = (ed_data.focus == "name") and ed_data.name or tostring(ed_data.price)
-        
         if code == 14 then
             if unicode.len(val) > 0 then val = unicode.sub(val, 1, -2) end
-        elseif char >= 32 then
-            val = val .. unicode.char(char)
-        end
-        
+        elseif char >= 32 then val = val .. unicode.char(char) end
         if ed_data.focus == "name" then ed_data.name = val else ed_data.price = val end
         refreshScreen()
         
@@ -184,6 +198,7 @@ while true do
                                         name = ed_data.name, price = tonumber(p_str), category = ed_data.cat, 
                                         stock = 0, id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name, db_slot = db_s 
                                     })
+                                    writeLog("ДОБАВЛЕН ТОВАР", currentUser.name, ed_data.name .. " за " .. p_str .. " ЭМ")
                                 else
                                     showMsg("ОШИБКА", "База данных заполнена!", true); return
                                 end
@@ -191,6 +206,7 @@ while true do
                                 table.insert(shop_buyback, { 
                                     name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name 
                                 })
+                                writeLog("ДОБАВЛЕНА СКУПКА", currentUser.name, ed_data.name .. " по " .. p_str .. " ЭМ")
                             end
                             saveShop()
                             state = (ed_data.target == "item") and "admin_item" or "admin_buy"
@@ -219,6 +235,7 @@ while true do
                             local success, msg, earned = me.sellAll(shop_buyback)
                             if success then 
                                 currentUser.balance = currentUser.balance + earned; saveUser()
+                                writeLog("ПРОДАЖА ИГРОКОМ", currentUser.name, msg .. " Начислено: " .. earned .. " ЭМ")
                                 showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false)
                             else showMsg("ОШИБКА", msg, true) end
                         end
@@ -250,11 +267,11 @@ while true do
                         if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
                         elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало ЭМ!", true)
                         else
-                            -- ИСПРАВЛЕННЫЙ ВЫЗОВ (Передаем весь item)
                             local ok, msg = me.buyItem(selectedItem, selectedQty)
                             if ok then
                                 currentUser.balance = currentUser.balance - cost
                                 saveUser(); saveShop()
+                                writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. selectedQty .. " за " .. cost .. " ЭМ")
                                 showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false)
                             else showMsg("ОШИБКА ВЫДАЧИ", msg, true) end
                         end
@@ -276,7 +293,6 @@ while true do
                             else
                                 local all_ok = true
                                 for _, ci in ipairs(cart) do
-                                    -- ИСПРАВЛЕННЫЙ ВЫЗОВ
                                     local ok, msg = me.buyItem(ci.item, ci.qty)
                                     if not ok then all_ok = false end
                                 end
@@ -284,6 +300,7 @@ while true do
                                 currentUser.balance = currentUser.balance - totalCost
                                 cart = {}
                                 saveUser(); saveShop()
+                                writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, "Оплачена корзина на сумму " .. totalCost .. " ЭМ")
                                 
                                 if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false)
                                 else showMsg("ОШИБКА", "Оплата прошла, но некоторые предметы не выданы!", true) end
@@ -306,8 +323,13 @@ while true do
                     elseif action:match("adm_del_") then
                         local idx = tonumber(action:match("%d+"))
                         if state == "admin_cat" then table.remove(categories, idx)
-                        elseif state == "admin_item" then table.remove(shop_items, idx)
-                        elseif state == "admin_buy" then table.remove(shop_buyback, idx) end
+                        elseif state == "admin_item" then 
+                            writeLog("УДАЛЕН ТОВАР", currentUser.name, shop_items[idx].name)
+                            table.remove(shop_items, idx)
+                        elseif state == "admin_buy" then 
+                            writeLog("УДАЛЕНА СКУПКА", currentUser.name, shop_buyback[idx].name)
+                            table.remove(shop_buyback, idx) 
+                        end
                         saveShop(); refreshScreen()
                     end
                 end
