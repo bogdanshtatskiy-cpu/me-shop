@@ -7,9 +7,8 @@ me.t = nil
 me.db = nil     
 
 me.config = { 
-    chest_side = sides.up,    -- Левый сундук сверху от Транспоузера
-    me_side = sides.down,     -- Левый МЭ Интерфейс снизу от Транспоузера
-    out_chest_side = sides.up -- Правый сундук сверху от правого МЭ Интерфейса
+    chest_side = sides.up,    -- Для скупки (сундук сверху от транспоузера)
+    me_side = sides.down      -- Для скупки (МЭ снизу от транспоузера)
 }
 
 function me.init()
@@ -23,7 +22,6 @@ end
 
 function me.updateStock(shop_items)
     local lookup = {}
-    -- Ищем любой рабочий МЭ интерфейс для сканирования сети
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
         local ok, net_items = pcall(me_proxy.getItemsInNetwork)
@@ -33,7 +31,7 @@ function me.updateStock(shop_items)
                 local key = key_name .. "_" .. (n_item.label or "")
                 lookup[key] = (lookup[key] or 0) + n_item.size
             end
-            break -- Одного успешного скана достаточно
+            break 
         end
     end
 
@@ -100,7 +98,7 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === УМНАЯ ВЫДАЧА (ПЕРЕБОР ВСЕХ МЭ ИНТЕРФЕЙСОВ) ===
+-- === УМНАЯ ВЫДАЧА (Пробивает все интерфейсы и все стороны) ===
 function me.buyItem(item, qty)
     if not me.db then return false, "БД не подключена!" end
     if not item.db_slot then return false, "Товар не привязан к БД! Передобавьте его." end
@@ -108,34 +106,34 @@ function me.buyItem(item, qty)
     local db_data = me.db.get(item.db_slot)
     if type(db_data) ~= "table" or not db_data.name then return false, "Слот БД пуст! Передобавьте товар." end
     
-    local perfect_fingerprint = {
-        id = db_data.name,
-        damage = db_data.damage or 0
-    }
+    local perfect_fingerprint = { id = db_data.name, damage = db_data.damage or 0 }
     if db_data.hasTag then perfect_fingerprint.hasTag = true end
     
     local success = false
-    local last_err = "МЭ Интерфейсы не найдены"
+    local last_err = "Сундук не найден ни с одной стороны!"
 
-    -- Перебираем ВСЕ интерфейсы в сети
+    -- Опрашиваем все интерфейсы
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
-        local ok, result, reason = pcall(function()
-            return me_proxy.exportItem(perfect_fingerprint, me.config.out_chest_side, qty)
-        end)
         
-        -- Если получилось выдать - прерываем цикл и радуемся
-        if ok and (result == true or (type(result) == "table" and result.size and result.size > 0) or (type(result) == "number" and result > 0)) then
-            success = true
-            break
-        else
-            -- Сохраняем ошибку на случай, если ни один интерфейс не сработает
-            last_err = tostring(reason or result)
+        -- Опрашиваем все 6 сторон (от 0 до 5)
+        for side = 0, 5 do
+            local ok, result, reason = pcall(function()
+                return me_proxy.exportItem(perfect_fingerprint, side, qty)
+            end)
+            
+            if ok and (result == true or (type(result) == "table" and result.size and result.size > 0) or (type(result) == "number" and result > 0)) then
+                success = true
+                break
+            elseif not ok then
+                last_err = tostring(result) -- Ловим ошибку мода, но продолжаем искать
+            end
         end
+        if success then break end
     end
     
     if success then return true, "Выдано"
-    else return false, "Ошибка сети: " .. last_err end
+    else return false, "Ошибка: " .. last_err end
 end
 
 return me
