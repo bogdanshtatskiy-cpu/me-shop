@@ -3,12 +3,14 @@ local event = require("event")
 local os = require("os")
 local gui = require("gui")
 local computer = require("computer")
-local config = require("config") -- ПОДКЛЮЧАЕМ КОНФИГ!
--- local me = require("me_logic")
+local config = require("config")
+local me = require("me_logic") -- ПОДКЛЮЧАЕМ МЭ ЛОГИКУ!
 
 os.execute("set +c")
 
--- Получаем ник владельца из конфига для вывода в сообщениях об ошибках
+-- Инициализация МЭ компонентов при старте
+local me_ok, me_msg = me.init()
+
 local OWNER_NAME = "Администратор"
 if config.admins then
     for k, v in pairs(config.admins) do OWNER_NAME = k; break end
@@ -19,9 +21,10 @@ local mock_items = {
     { name = "Iridium Plate", price = 80, stock = 45, category = "Ресурсы" }
 }
 
+-- Тестовый список скупки (name должен совпадать с label предмета в игре)
 local mock_buyback = {
-    { name = "Thorium", price = 15, label = "Thorium" },
-    { name = "Uranium", price = 25, label = "Uranium" }
+    { name = "Cobblestone", price = 1 }, -- Для тестов используем булыжник
+    { name = "Thorium", price = 15 }
 }
 
 local categories = {"ВСЕ", "Ресурсы", "Механизмы", "Броня"}
@@ -45,12 +48,21 @@ local function refreshScreen()
         end
         gui.drawItems(filtered)
         gui.drawBuybackItems(mock_buyback)
+        
+        -- Если МЭ сеть не инициализировалась, выводим предупреждение внизу экрана
+        if not me_ok then
+            local W, H = component.gpu.getResolution()
+            component.gpu.setForeground(gui.COLORS.bad)
+            component.gpu.set(2, H, "СИСТЕМНАЯ ОШИБКА: " .. me_msg)
+        end
+        
     elseif state == "modal_qty" then
         gui.drawStatic(currentUser, idleTimer)
         gui.drawQuantitySelector(selectedItem, selectedQty)
     elseif state == "admin" then
         require("term").clear()
         print("=== ПАНЕЛЬ АДМИНИСТРАТОРА: " .. currentUser.name .. " ===")
+        print("Статус МЭ: " .. tostring(me_msg))
         print("1. Добавить товары (в разработке)")
         print("2. Калибровка МЭ сундуков (в разработке)")
         gui.buttons = {}
@@ -93,12 +105,10 @@ while true do
                 
                 elseif state == "shop" then
                     if action == "login" then
-                        -- ПРОВЕРКА АДМИНА ЧЕРЕЗ CONFIG.LUA
                         local is_adm = false
-                        if config.admins and config.admins[player_name] then
-                            is_adm = true
-                        end
-                        currentUser = { name = player_name, balance = 1000, isAdmin = is_adm }
+                        if config.admins and config.admins[player_name] then is_adm = true end
+                        -- Для тестов даем начальный баланс 0, чтобы проверить скупку
+                        currentUser = { name = player_name, balance = 0, isAdmin = is_adm }
                         idleTimer = 20
                         refreshScreen()
                     elseif action == "logout" then
@@ -107,11 +117,21 @@ while true do
                         state = "admin"; refreshScreen()
                     elseif action:match("cat_") then
                         active_category = action:gsub("cat_", ""); refreshScreen()
+                        
+                    -- === ФИЗИЧЕСКАЯ ПРОДАЖА ПРЕДМЕТОВ ===
                     elseif action == "sell_all" then
-                        if not currentUser then showMsg("ОШИБКА", "Сначала авторизуйтесь!", true)
+                        if not currentUser then 
+                            showMsg("ОШИБКА", "Сначала авторизуйтесь!", true)
                         else
-                            showMsg("УСПЕШНАЯ СДАЧА", "Продажа в разработке... Ждем МЭ логику.", false)
+                            local success, msg, earned = me.sellAll(mock_buyback)
+                            if success then
+                                currentUser.balance = currentUser.balance + earned
+                                showMsg("УСПЕШНАЯ СДАЧА", msg .. " | Зачислено: " .. earned .. " ЭМ", false)
+                            else
+                                showMsg("ОШИБКА СДАЧИ", msg, true)
+                            end
                         end
+                        
                     elseif action:match("buy_") then
                         if not currentUser then showMsg("ОШИБКА", "Сначала авторизуйтесь!", true)
                         else
@@ -130,11 +150,11 @@ while true do
                     elseif action == "confirm_buy" then
                         local totalCost = selectedItem.price * selectedQty
                         if selectedItem.stock < selectedQty then
-                            -- ИСПОЛЬЗУЕМ ДИНАМИЧЕСКИЙ НИК АДМИНА
                             showMsg("ОШИБКА", "Не хватает товара! Напишите " .. OWNER_NAME, true)
                         elseif currentUser.balance < totalCost then
                             showMsg("ОШИБКА", "Недостаточно средств!", true)
                         else
+                            -- В будущем здесь будет me.buyItem()
                             currentUser.balance = currentUser.balance - totalCost
                             selectedItem.stock = selectedItem.stock - selectedQty
                             showMsg("УСПЕХ", "Куплено " .. selectedQty .. " шт.", false)
