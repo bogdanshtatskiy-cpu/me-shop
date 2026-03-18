@@ -19,6 +19,27 @@ function me.init()
     return true, "МЭ компоненты готовы."
 end
 
+-- Обновление количества товаров из МЭ сети
+function me.updateStock(shop_items)
+    if not me.me_net then return end
+    local ok, net_items = pcall(me.me_net.getItemsInNetwork)
+    if not ok or not net_items then return end
+
+    -- Создаем быстрый справочник того, что есть в МЭ
+    local lookup = {}
+    for _, n_item in ipairs(net_items) do
+        local key = n_item.name .. "_" .. (n_item.label or "")
+        lookup[key] = (lookup[key] or 0) + n_item.size
+    end
+
+    -- Обновляем счетчики в магазине
+    for _, s_item in ipairs(shop_items) do
+        local key = s_item.id .. "_" .. (s_item.orig_label or "")
+        s_item.stock = lookup[key] or 0
+    end
+end
+
+-- Скупка товаров
 function me.sellAll(buyback_list)
     if not me.t then return false, "Транспоузер не подключен!", 0 end
     local inv_size = me.t.getInventorySize(me.config.chest_side)
@@ -31,7 +52,8 @@ function me.sellAll(buyback_list)
         if stack and stack.size > 0 then
             local matched_item = nil
             for _, b_item in ipairs(buyback_list) do
-                if stack.label == b_item.name or stack.name == b_item.name then
+                -- ТЕПЕРЬ СВЕРЯЕМ ПО ОРИГИНАЛЬНОМУ ID ИЛИ LABEL!
+                if stack.name == b_item.id or stack.label == b_item.orig_label then
                     matched_item = b_item; break
                 end
             end
@@ -53,17 +75,22 @@ function me.sellAll(buyback_list)
     else return false, "Не продано. Причина: " .. tostring(err_msg or "Нет подходящих предметов"), 0 end
 end
 
--- НОВАЯ ФУНКЦИЯ ДЛЯ АДМИНА: Посмотреть предмет в сундуке
 function me.peekInput()
-    if not me.t then return nil, "Транспоузер не подключен!" end
+    if not me.t then return nil, nil, "Транспоузер не подключен!" end
     local inv_size = me.t.getInventorySize(me.config.chest_side)
-    if not inv_size or inv_size == 0 then return nil, "Сундук не найден!" end
+    if not inv_size or inv_size == 0 then return nil, nil, "Сундук не найден!" end
     
     for slot = 1, inv_size do
         local stack = me.t.getStackInSlot(me.config.chest_side, slot)
-        if stack and stack.size > 0 then return stack end
+        if stack and stack.size > 0 then return stack, slot end
     end
-    return nil, "Положите предмет в сундук!"
+    return nil, nil, "Положите предмет в сундук!"
+end
+
+-- Сохранение слепка предмета в Базу Данных
+function me.storeToDB(chest_slot, db_slot)
+    if not me.t or not me.db then return false end
+    return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
 return me
