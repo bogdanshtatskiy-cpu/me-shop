@@ -100,32 +100,34 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === БРОНЕБОЙНАЯ ВЫДАЧА (СКАНИРУЕМ СЕТЬ ПРЯМО ПЕРЕД ВЫДАЧЕЙ) ===
+-- === БРОНЕБОЙНАЯ ВЫДАЧА (С ПЕРЕВОДОМ NAME -> ID) ===
 function me.buyItem(item, qty)
     if not me.me_net then return false, "МЭ Интерфейс не подключен!" end
     if not item.id then return false, "Ошибка: у товара нет ID!" end
     
-    -- Делаем снимок сети
     local ok, net_items = pcall(me.me_net.getItemsInNetwork)
     if not ok or not net_items then return false, "Не удалось просканировать МЭ сеть!" end
     
-    local target_fingerprint = nil
+    local target = nil
     for _, n_item in ipairs(net_items) do
-        -- Сравниваем предмет из магазина с предметами в МЭ
         if n_item.name == item.id and (not item.damage or n_item.damage == item.damage) then
-            target_fingerprint = n_item
+            target = n_item
             break
         end
     end
     
-    if not target_fingerprint then
-        return false, "Этого товара сейчас нет в МЭ сети!"
-    end
+    if not target then return false, "Этого товара сейчас нет в МЭ сети!" end
+    
+    -- ВОТ ОН, ПЕРЕВОДЧИК! МЭ сеть вернула name, а мы отдаем ей id.
+    local ae2_fingerprint = {
+        id = target.name,
+        damage = target.damage,
+        hasTag = target.hasTag
+    }
     
     local result, reason
     local ok2, err = pcall(function()
-        -- Скармливаем МЭ сети её же собственный, 100% правильный слепок
-        result, reason = me.me_net.exportItem(target_fingerprint, me.config.out_chest_side, qty)
+        result, reason = me.me_net.exportItem(ae2_fingerprint, me.config.out_chest_side, qty)
     end)
     
     if not ok2 then return false, "Краш выдачи: " .. tostring(err) end
