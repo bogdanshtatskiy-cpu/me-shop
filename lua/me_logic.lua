@@ -41,7 +41,6 @@ function me.updateStock(shop_items)
     end
 end
 
--- НАДЕЖНАЯ СКУПКА (Совместима с 1.7.10)
 function me.sellAll(buyback_list)
     if not me.t then return false, "Транспоузер не подключен!", 0 end
 
@@ -52,7 +51,6 @@ function me.sellAll(buyback_list)
     local sold_stats = {}
     local err_msg = nil
 
-    -- Перебираем слоты по одному (безопасный метод)
     for slot = 1, inv_size do
         local stack = me.t.getStackInSlot(me.config.chest_side, slot)
         if stack and stack.size > 0 then
@@ -72,7 +70,6 @@ function me.sellAll(buyback_list)
 
                 if actual_moved > 0 then
                     total_earned = total_earned + (actual_moved * matched_item.price)
-                    -- Записываем в чек
                     sold_stats[matched_item.name] = (sold_stats[matched_item.name] or 0) + actual_moved
                 end
             end
@@ -80,7 +77,6 @@ function me.sellAll(buyback_list)
     end
 
     if total_earned > 0 then
-        -- Формируем красивый чек из собранной статистики
         local receipt = ""
         for name, qty in pairs(sold_stats) do receipt = receipt .. name .. "(x" .. qty .. ") " end
         return true, "Сдано: " .. receipt, total_earned
@@ -104,15 +100,28 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
+-- === ИСПРАВЛЕННАЯ ФУНКЦИЯ ВЫДАЧИ ===
 function me.buyItem(db_slot, qty)
     if not me.me_net or not me.db then return false, "МЭ или БД не подключены!" end
     if not db_slot then return false, "Товар не привязан к Базе Данных!" end
     
+    -- 1. Достаем таблицу с характеристиками предмета из Базы Данных
+    local fingerprint = me.db.get(db_slot)
+    if not fingerprint then return false, "Слот в БД пуст!" end
+    
+    local result, reason
     local ok, err = pcall(function()
-        me.me_net.exportItem(me.db.address, db_slot, qty, me.config.out_chest_side)
+        -- 2. Передаем эту таблицу в МЭ Интерфейс
+        result, reason = me.me_net.exportItem(fingerprint, me.config.out_chest_side, qty)
     end)
     
-    if ok then return true, "Выдано" else return false, tostring(err) end
+    if not ok then return false, "Краш выдачи: " .. tostring(err) end
+    
+    -- Проверяем успешность (разные версии AE2 возвращают разное)
+    if type(result) == "table" and result.size and result.size > 0 then return true, "Выдано"
+    elseif type(result) == "number" and result > 0 then return true, "Выдано"
+    elseif result == true then return true, "Выдано"
+    else return false, tostring(reason or "Сундук полон или нет товара в МЭ!") end
 end
 
 return me
