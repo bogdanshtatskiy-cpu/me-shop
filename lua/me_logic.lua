@@ -17,13 +17,20 @@ function me.init()
     if component.isAvailable("me_interface") then me.me_net = component.me_interface end
     if component.isAvailable("database") then me.db = component.database end
 
+    -- === НАДЕЖНАЯ ЗАГРУЗКА КАЛИБРОВКИ ===
     local f = io.open("/home/calibration.json", "r")
     if f then
-        local data = json.decode(f:read("*a"))
+        local content = f:read("*a")
         f:close()
-        if data and data.in_t and data.out_t then
-            me.t_in = component.proxy(data.in_t)
-            me.t_out = component.proxy(data.out_t)
+        if content and content ~= "" then
+            local ok, data = pcall(json.decode, content)
+            if ok and type(data) == "table" and data.in_t and data.out_t then
+                -- Сверяем с реально существующими адресами
+                for addr in component.list("transposer") do
+                    if addr == data.in_t then me.t_in = component.proxy(addr) end
+                    if addr == data.out_t then me.t_out = component.proxy(addr) end
+                end
+            end
         end
     end
 
@@ -74,7 +81,6 @@ function me.updateStock(shop_items)
         local ok, net_items = pcall(me.me_net.getItemsInNetwork)
         if ok and net_items then
             for _, n_item in ipairs(net_items) do
-                -- Учитываем метадату (damage) при подсчете!
                 local dmg = math.floor(n_item.damage or 0)
                 local key = (n_item.name or "unknown") .. ":" .. dmg
                 lookup[key] = (lookup[key] or 0) + n_item.size
@@ -101,7 +107,6 @@ function me.sellAll(buyback_list)
         if stack and stack.size > 0 then
             local matched_item = nil
             for _, b_item in ipairs(buyback_list) do
-                -- СТРОГАЯ ПРОВЕРКА ПО ID И DAMAGE
                 if stack.name == b_item.id and math.floor(stack.damage or 0) == math.floor(b_item.damage or 0) then
                     matched_item = b_item; break
                 end
@@ -144,26 +149,26 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t_in.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === ИДЕАЛЬНАЯ ВЫДАЧА ЧЕРЕЗ КОНФИГУРАЦИЮ МЭ ИНТЕРФЕЙСА ===
 function me.buyItem(item, qty)
     if not me.me_net or not me.db then return false, "МЭ или БД не подключены!" end
     if not me.t_out then return false, "Транспоузер выдачи не найден!" end
     if not item.db_slot then return false, "Товар не привязан к Базе Данных!" end
     
-    pcall(function() me.me_net.setInterfaceConfiguration(1) end) -- Очищаем буфер
+    pcall(function() me.me_net.setInterfaceConfiguration(1) end) 
     
-    -- 1. Настраиваем МЭ Интерфейс на точную копию предмета из Базы Данных
     local ok, err = pcall(function()
         me.me_net.setInterfaceConfiguration(1, me.db.address, item.db_slot, qty)
     end)
     if not ok then return false, "Сбой МЭ: " .. tostring(err) end
     
-    -- 2. Правый Транспоузер выкачивает предметы из интерфейса в сундук
     local moved = 0
     local attempts = 0
+    -- === ИСПРАВЛЕННЫЙ ЦИКЛ ПОИСКА (Сканируем все слоты интерфейса) ===
+    local inv_size = me.t_out.getInventorySize(me.config.me_side) or 36
+    
     while moved < qty and attempts < 10 do
         os.sleep(0.5)
-        for slot = 1, 9 do
+        for slot = 1, inv_size do
             local stack = me.t_out.getStackInSlot(me.config.me_side, slot)
             if stack and stack.size > 0 then
                 local to_move = math.min(qty - moved, stack.size)
@@ -176,7 +181,6 @@ function me.buyItem(item, qty)
         attempts = attempts + 1
     end
     
-    -- 3. Стираем настройку (МЭ интерфейс сам заберет остатки обратно в сеть)
     pcall(function() me.me_net.setInterfaceConfiguration(1) end)
     
     if moved > 0 then return true, "Выдано " .. moved .. " шт."
