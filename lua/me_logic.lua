@@ -100,24 +100,31 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === ИСПРАВЛЕННАЯ ФУНКЦИЯ ВЫДАЧИ ===
+-- ВЫДАЧА ПРЕДМЕТА ИЗ МЭ В СУНДУК
 function me.buyItem(db_slot, qty)
     if not me.me_net or not me.db then return false, "МЭ или БД не подключены!" end
     if not db_slot then return false, "Товар не привязан к Базе Данных!" end
     
-    -- 1. Достаем таблицу с характеристиками предмета из Базы Данных
-    local fingerprint = me.db.get(db_slot)
-    if not fingerprint then return false, "Слот в БД пуст!" end
+    -- Получаем данные от OpenComputers (ID лежит в name)
+    local oc_item = me.db.get(db_slot)
+    if not oc_item then return false, "Слот в БД пуст!" end
+    
+    -- Конвертируем формат OC в формат AE2 (меняем name на id)
+    local ae2_fingerprint = {
+        id = oc_item.name,
+        damage = oc_item.damage,
+        label = oc_item.label,
+        hasTag = oc_item.hasTag
+    }
     
     local result, reason
     local ok, err = pcall(function()
-        -- 2. Передаем эту таблицу в МЭ Интерфейс
-        result, reason = me.me_net.exportItem(fingerprint, me.config.out_chest_side, qty)
+        -- Отправляем исправленный отпечаток в МЭ сеть
+        result, reason = me.me_net.exportItem(ae2_fingerprint, me.config.out_chest_side, qty)
     end)
     
     if not ok then return false, "Краш выдачи: " .. tostring(err) end
     
-    -- Проверяем успешность (разные версии AE2 возвращают разное)
     if type(result) == "table" and result.size and result.size > 0 then return true, "Выдано"
     elseif type(result) == "number" and result > 0 then return true, "Выдано"
     elseif result == true then return true, "Выдано"
