@@ -31,7 +31,9 @@ function me.updateStock(shop_items)
 
     local lookup = {}
     for _, n_item in ipairs(net_items) do
-        local key = n_item.name .. "_" .. (n_item.label or "")
+        -- Пытаемся зацепиться за любое доступное имя
+        local key_name = n_item.name or n_item.label or "unknown"
+        local key = key_name .. "_" .. (n_item.label or "")
         lookup[key] = (lookup[key] or 0) + n_item.size
     end
 
@@ -100,42 +102,39 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === БРОНЕБОЙНАЯ ВЫДАЧА (С ПЕРЕВОДОМ NAME -> ID) ===
+-- === ФИНАЛЬНАЯ ВЫДАЧА ЧЕРЕЗ БАЗУ ДАННЫХ ===
 function me.buyItem(item, qty)
-    if not me.me_net then return false, "МЭ Интерфейс не подключен!" end
-    if not item.id then return false, "Ошибка: у товара нет ID!" end
+    if not me.me_net or not me.db then return false, "МЭ или БД не подключены!" end
+    if not item.db_slot then return false, "Ошибка: Товар не привязан к БД! Передобавьте его в админке." end
     
-    local ok, net_items = pcall(me.me_net.getItemsInNetwork)
-    if not ok or not net_items then return false, "Не удалось просканировать МЭ сеть!" end
-    
-    local target = nil
-    for _, n_item in ipairs(net_items) do
-        if n_item.name == item.id and (not item.damage or n_item.damage == item.damage) then
-            target = n_item
-            break
-        end
+    -- Берем информацию о предмете напрямую из Улучшения "База Данных"
+    local db_data = me.db.get(item.db_slot)
+    if type(db_data) ~= "table" or not db_data.name then
+        return false, "Слот БД пуст! Передобавьте товар в админке."
     end
     
-    if not target then return false, "Этого товара сейчас нет в МЭ сети!" end
-    
-    -- ВОТ ОН, ПЕРЕВОДЧИК! МЭ сеть вернула name, а мы отдаем ей id.
-    local ae2_fingerprint = {
-        id = target.name,
-        damage = target.damage,
-        hasTag = target.hasTag
+    -- Собираем идеальную таблицу-слепок (AE2 требует id, БД выдает name)
+    local perfect_fingerprint = {
+        id = db_data.name,
+        damage = db_data.damage or 0
     }
     
+    -- Если предмет с NBT (чар, заряд), обязательно передаем это тоже
+    if db_data.hasTag then
+        perfect_fingerprint.hasTag = true
+    end
+    
     local result, reason
-    local ok2, err = pcall(function()
-        result, reason = me.me_net.exportItem(ae2_fingerprint, me.config.out_chest_side, qty)
+    local ok, err = pcall(function()
+        result, reason = me.me_net.exportItem(perfect_fingerprint, me.config.out_chest_side, qty)
     end)
     
-    if not ok2 then return false, "Краш выдачи: " .. tostring(err) end
+    if not ok then return false, "Сбой МЭ: " .. tostring(err) end
     
     if type(result) == "table" and result.size and result.size > 0 then return true, "Выдано"
     elseif type(result) == "number" and result > 0 then return true, "Выдано"
     elseif result == true then return true, "Выдано"
-    else return false, tostring(reason or "Сундук полон или нет места!") end
+    else return false, tostring(reason or "Нет места в сундуке или товара в сети!") end
 end
 
 return me
