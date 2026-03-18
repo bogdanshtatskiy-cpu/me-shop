@@ -150,12 +150,12 @@ function me.buyItem(item, qty)
     if not item.db_slot then return false, "Товар не привязан к БД!" end
     if not me.t_out then return false, "Транспоузер выдачи не найден!" end
     
-    -- Очищаем интерфейсы от старого мусора
+    -- Очищаем все интерфейсы
     for addr in component.list("me_interface") do
         pcall(function() component.proxy(addr).setInterfaceConfiguration(1) end)
     end
     
-    -- Настраиваем МЭ Интерфейс держать предмет
+    -- Настраиваем МЭ Интерфейс
     local configured = false
     for addr in component.list("me_interface") do
         local ok = pcall(function() 
@@ -165,39 +165,38 @@ function me.buyItem(item, qty)
     end
     if not configured then return false, "Не удалось настроить МЭ Интерфейсы!" end
 
-    -- Ждем чуть дольше, чтобы сеть точно переложила предметы в буфер интерфейса
-    os.sleep(1.5)
-
     local moved = 0
     local attempts = 0
-    local inv_size = me.t_out.getInventorySize(me.config.me_side)
-    if not inv_size or inv_size == 0 then inv_size = 36 end
     
-    -- ВЫКАЧИВАЕМ ВСЁ, ЧТО ВИДИМ В ИНТЕРФЕЙСЕ (без проверок названий)
-    while moved < qty and attempts < 15 do
-        for slot = 1, inv_size do
-            local stack = me.t_out.getStackInSlot(me.config.me_side, slot)
-            -- Если есть хоть какой-то предмет - качаем наверх!
-            if stack and stack.size > 0 then
-                local to_move = math.min(qty - moved, stack.size)
-                local actual = me.t_out.transferItem(me.config.me_side, me.config.chest_side, to_move, slot)
-                if type(actual) == "number" then moved = moved + actual
-                elseif type(actual) == "boolean" and actual == true then moved = moved + to_move end
+    -- СЛЕПОЙ ПЫЛЕСОС: Качаем всё, не проверяя, что там лежит
+    while moved < qty and attempts < 20 do
+        os.sleep(0.25) -- Ждем 5 тиков, пока МЭ сеть перекинет предмет
+        
+        -- В AE2 предметы обычно падают в слоты с 1 по 18
+        for slot = 1, 18 do
+            local actual = me.t_out.transferItem(me.config.me_side, me.config.chest_side, qty - moved, slot)
+            if type(actual) == "number" and actual > 0 then 
+                moved = moved + actual 
             end
             if moved >= qty then break end
         end
-        if moved >= qty then break end
-        os.sleep(0.5)
+        
+        -- Резервный метод: качаем без указания слота
+        if moved < qty then
+            local actual = me.t_out.transferItem(me.config.me_side, me.config.chest_side, qty - moved)
+            if type(actual) == "number" and actual > 0 then moved = moved + actual end
+        end
+        
         attempts = attempts + 1
     end
 
-    -- Очищаем настройку (МЭ сеть всосет излишки обратно, если они были)
+    -- Очищаем интерфейс
     for addr in component.list("me_interface") do
         pcall(function() component.proxy(addr).setInterfaceConfiguration(1) end)
     end
     
     if moved > 0 then return true, "Выдано " .. moved .. " шт."
-    else return false, "Не удалось вытащить товар из МЭ Интерфейса!" end
+    else return false, "Интерфейс не отдал предмет! (Возможно, его нет в МЭ)" end
 end
 
 return me
