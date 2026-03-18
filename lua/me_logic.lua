@@ -100,39 +100,40 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === ИСПРАВЛЕННАЯ ВЫДАЧА (С РЕЗЕРВНЫМ ID) ===
+-- === БРОНЕБОЙНАЯ ВЫДАЧА (СКАНИРУЕМ СЕТЬ ПРЯМО ПЕРЕД ВЫДАЧЕЙ) ===
 function me.buyItem(item, qty)
     if not me.me_net then return false, "МЭ Интерфейс не подключен!" end
     if not item.id then return false, "Ошибка: у товара нет ID!" end
     
-    -- Резервный слепок (всегда сработает, даже если БД пуста)
-    local ae2_fingerprint = {
-        id = item.id,
-        damage = item.damage or 0
-    }
+    -- Делаем снимок сети
+    local ok, net_items = pcall(me.me_net.getItemsInNetwork)
+    if not ok or not net_items then return false, "Не удалось просканировать МЭ сеть!" end
     
-    -- Если есть БД, пытаемся прочитать теги (NBT)
-    if me.db and item.db_slot then
-        local oc_item = me.db.get(item.db_slot)
-        -- Проверяем, что БД вернула нормальную таблицу с именем, а не пустышку
-        if type(oc_item) == "table" and oc_item.name then
-            ae2_fingerprint.id = oc_item.name
-            ae2_fingerprint.damage = oc_item.damage or ae2_fingerprint.damage
-            ae2_fingerprint.hasTag = oc_item.hasTag
+    local target_fingerprint = nil
+    for _, n_item in ipairs(net_items) do
+        -- Сравниваем предмет из магазина с предметами в МЭ
+        if n_item.name == item.id and (not item.damage or n_item.damage == item.damage) then
+            target_fingerprint = n_item
+            break
         end
     end
     
+    if not target_fingerprint then
+        return false, "Этого товара сейчас нет в МЭ сети!"
+    end
+    
     local result, reason
-    local ok, err = pcall(function()
-        result, reason = me.me_net.exportItem(ae2_fingerprint, me.config.out_chest_side, qty)
+    local ok2, err = pcall(function()
+        -- Скармливаем МЭ сети её же собственный, 100% правильный слепок
+        result, reason = me.me_net.exportItem(target_fingerprint, me.config.out_chest_side, qty)
     end)
     
-    if not ok then return false, "Краш выдачи: " .. tostring(err) end
+    if not ok2 then return false, "Краш выдачи: " .. tostring(err) end
     
     if type(result) == "table" and result.size and result.size > 0 then return true, "Выдано"
     elseif type(result) == "number" and result > 0 then return true, "Выдано"
     elseif result == true then return true, "Выдано"
-    else return false, tostring(reason or "Нет товара в МЭ или сундук полон!") end
+    else return false, tostring(reason or "Сундук полон или нет места!") end
 end
 
 return me
