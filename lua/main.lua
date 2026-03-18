@@ -2,14 +2,13 @@
 local component = require("component")
 local event = require("event")
 local os = require("os")
-local term = require("term")
 local unicode = require("unicode")
 local gui = require("gui")
+local computer = require("computer")
 local config = require("config")
 local me = require("me_logic")
 local network = require("network")
 local json = require("json")
-local computer = require("computer")
 
 os.execute("set +c")
 local me_ok, me_msg = me.init()
@@ -29,7 +28,9 @@ local selectedItem = nil
 local selectedQty = 1
 local isCartMode = false
 local cart = {}
-local admin_add_target = "item"
+
+-- Переменные редактора
+local ed_data = {}
 
 local function saveShop()
     local data = { categories = categories, items = shop_items, buyback = shop_buyback }
@@ -54,42 +55,16 @@ local function loadDB()
     end
 end
 
--- ВВОД ТЕКСТА ПРЯМО В GUI (без черных экранов)
-local function readGUIInput(x, y, w, default)
-    local text = default or ""
-    local gpu = component.gpu
-    gpu.setBackground(gui.COLORS.panel)
-    gpu.setForeground(gui.COLORS.good)
-    while true do
-        gpu.fill(x, y, w, 1, " ")
-        gpu.set(x, y, text .. "_") -- мигающий курсор
-        local ev, _, char, code = event.pull("key_down")
-        if code == 14 then -- Backspace
-            text = unicode.sub(text, 1, -2)
-        elseif code == 28 then -- Enter
-            gpu.set(x, y, text .. " ")
-            return text
-        elseif char >= 32 then
-            if unicode.len(text) < w - 2 then text = text .. unicode.char(char) end
-        end
-    end
-end
-
--- Поиск свободного слота в Базе Данных (1-81)
 local function getFreeDBSlot()
     local used = {}
-    for _, item in ipairs(shop_items) do
-        if item.db_slot then used[item.db_slot] = true end
-    end
-    for i = 1, 81 do
-        if not used[i] then return i end
-    end
+    for _, item in ipairs(shop_items) do if item.db_slot then used[item.db_slot] = true end end
+    for i = 1, 81 do if not used[i] then return i end end
     return nil
 end
 
 local function refreshScreen()
     if state == "shop" then
-        me.updateStock(shop_items) -- ОБНОВЛЯЕМ КОЛИЧЕСТВО ИЗ МЭ СЕТИ!
+        me.updateStock(shop_items)
         gui.drawStatic(currentUser, currentUser and idleTimer or nil, #cart)
         gui.drawCategories(categories, active_category)
         local filtered = {}
@@ -111,6 +86,10 @@ local function refreshScreen()
     elseif state == "admin_cat" then gui.drawAdmin("cat", categories)
     elseif state == "admin_item" then gui.drawAdmin("item", shop_items)
     elseif state == "admin_buy" then gui.drawAdmin("buy", shop_buyback)
+        
+    elseif state == "editor" then
+        gui.drawStatic(currentUser, idleTimer, #cart)
+        gui.drawEditorModal(ed_data, categories)
     end
 end
 
@@ -123,14 +102,29 @@ loadDB()
 refreshScreen()
 
 while true do
-    local ev, _, x, y, _, player_name = event.pull(1, "touch")
+    local ev, _, x, y, button, player_name = event.pull(1)
     
-    if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and not string.match(state, "admin") then
+    if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
         if not ev then 
             idleTimer = idleTimer - 1
             if idleTimer <= 0 then currentUser = nil; cart = {}; state = "shop"; active_category = "ВСЕ" end
             refreshScreen()
         else idleTimer = 30 end
+    end
+
+    -- ОБРАБОТКА ВВОДА С КЛАВИАТУРЫ ДЛЯ РЕДАКТОРА
+    if ev == "key_down" and state == "editor" then
+        local char, code = y, button -- В event.pull для key_down x=char, y=code
+        local val = (ed_data.focus == "name") and ed_data.name or ed_data.price
+        
+        if code == 14 then -- Backspace
+            val = unicode.sub(val, 1, -2)
+        elseif char >= 32 then
+            val = val .. unicode.char(char)
+        end
+        
+        if ed_data.focus == "name" then ed_data.name = val else ed_data.price = val end
+        refreshScreen()
     end
 
     if ev == "touch" then
@@ -147,50 +141,63 @@ while true do
                     if state == "admin_wait_scan" then
                         local stack, slot = me.peekInput()
                         if not stack then
-                            state = (admin_add_target == "item") and "admin_item" or "admin_buy"
-                            showMsg("ОШИБКА", slot, true) -- slot содержит сообщение об ошибке
+                            state = (ed_data.target == "item") and "admin_item" or "admin_buy"
+                            showMsg("ОШИБКА СКАНЕРА", slot, true)
                         else
-                            -- РИСУЕМ КРАСИВЫЙ РЕДАКТОР
-                            local isItem = (admin_add_target == "item")
-                            local nx, ny, px, py, cx, cy, w = gui.drawEditor("ДОБАВЛЕНИЕ", stack.label, isItem)
-                            
-                            -- Читаем поля по очереди
-                            local n = readGUIInput(nx, ny, w, stack.label)
-                            local p = readGUIInput(px, py, w, "10")
-                            local cat = isItem and readGUIInput(cx, cy, w, categories[2]) or "ВСЕ"
-                            
-                            if n == "" then n = stack.label end
-                            
-                            if p and tonumber(p) then
-                                if isItem then
-                                    local db_s = getFreeDBSlot()
-                                    if db_s then
-                                        me.storeToDB(slot, db_s) -- СОХРАНЯЕМ В БАЗУ ДАННЫХ
-                                        table.insert(shop_items, { 
-                                            name = n, price = tonumber(p), category = cat, stock = 0, 
-                                            id = stack.name, orig_label = stack.label, db_slot = db_s 
-                                        })
-                                    else
-                                        showMsg("ОШИБКА", "База данных заполнена!", true)
-                                        return
-                                    end
-                                else
-                                    table.insert(shop_buyback, { 
-                                        name = n, price = tonumber(p), id = stack.name, orig_label = stack.label 
-                                    })
-                                end
-                                saveShop()
-                                state = (admin_add_target == "item") and "admin_item" or "admin_buy"
-                                refreshScreen()
-                            else
-                                state = (admin_add_target == "item") and "admin_item" or "admin_buy"
-                                showMsg("ОШИБКА", "Цена должна быть числом!", true)
-                            end
+                            -- ОТКРЫВАЕМ ВСТРОЕННЫЙ РЕДАКТОР
+                            ed_data.isItem = (ed_data.target == "item")
+                            ed_data.orig_name = stack.label
+                            ed_data.orig_id = stack.name
+                            ed_data.name = stack.label
+                            ed_data.price = ""
+                            ed_data.cat = categories[2]
+                            ed_data.focus = "name"
+                            ed_data.slot = slot
+                            state = "editor"; refreshScreen()
                         end
                     else
                         state = "shop"; refreshScreen()
                     end
                 
+                -- === РЕДАКТОР ===
+                elseif state == "editor" then
+                    if action == "focus_name" then ed_data.focus = "name"; refreshScreen()
+                    elseif action == "focus_price" then ed_data.focus = "price"; refreshScreen()
+                    elseif action:match("setcat_") then
+                        ed_data.cat = action:gsub("setcat_", "")
+                        refreshScreen()
+                    elseif action == "ed_cancel" then
+                        state = (ed_data.target == "item") and "admin_item" or "admin_buy"
+                        refreshScreen()
+                    elseif action == "ed_save" then
+                        -- ЗАМЕНА ЗАПЯТОЙ НА ТОЧКУ В ЦЕНЕ
+                        local p_str = ed_data.price:gsub(",", ".")
+                        if p_str == "" or not tonumber(p_str) then
+                            showMsg("ОШИБКА", "Введите корректную цену (число)!", true)
+                        else
+                            if ed_data.isItem then
+                                local db_s = getFreeDBSlot()
+                                if db_s then
+                                    me.storeToDB(ed_data.slot, db_s)
+                                    table.insert(shop_items, { 
+                                        name = ed_data.name, price = tonumber(p_str), category = ed_data.cat, 
+                                        stock = 0, id = ed_data.orig_id, orig_label = ed_data.orig_name, db_slot = db_s 
+                                    })
+                                else
+                                    showMsg("ОШИБКА", "База данных заполнена!", true); return
+                                end
+                            else
+                                table.insert(shop_buyback, { 
+                                    name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, orig_label = ed_data.orig_name 
+                                })
+                            end
+                            saveShop()
+                            state = (ed_data.target == "item") and "admin_item" or "admin_buy"
+                            refreshScreen()
+                        end
+                    end
+                
+                -- === МАГАЗИН ===
                 elseif state == "shop" then
                     if action == "login" then
                         local is_adm = false; if config.admins and config.admins[player_name] then is_adm = true end
@@ -212,7 +219,7 @@ while true do
                             local success, msg, earned = me.sellAll(shop_buyback)
                             if success then 
                                 currentUser.balance = currentUser.balance + earned; saveUser()
-                                showMsg("УСПЕХ", msg .. " +" .. earned .. " ЭМ", false)
+                                showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false)
                             else showMsg("ОШИБКА", msg, true) end
                         end
                         
@@ -231,6 +238,7 @@ while true do
                         end
                     end
                 
+                -- === ОКНО КОЛИЧЕСТВА ===
                 elseif state == "modal_qty" then
                     if action == "qty_add1" then selectedQty = selectedQty + 1
                     elseif action == "qty_sub1" then selectedQty = selectedQty - 1
@@ -243,15 +251,22 @@ while true do
                         if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
                         elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало ЭМ!", true)
                         else
-                            currentUser.balance = currentUser.balance - cost
-                            saveUser(); saveShop()
-                            showMsg("ОПЛАТА", "Предметы добавлены в заказ!", false)
+                            -- ФИЗИЧЕСКАЯ ВЫДАЧА
+                            local ok, msg = me.buyItem(selectedItem.db_slot, selectedQty)
+                            if ok then
+                                currentUser.balance = currentUser.balance - cost
+                                saveUser(); saveShop()
+                                showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false)
+                            else
+                                showMsg("ОШИБКА ВЫДАЧИ", msg, true)
+                            end
                         end
                     end
                     if selectedQty < 1 then selectedQty = 1 end
                     if selectedQty > 64 then selectedQty = 64 end
                     if state == "modal_qty" then refreshScreen() end
                 
+                -- === КОРЗИНА ===
                 elseif state == "cart" then
                     if action:match("cart_del_") then
                         local idx = tonumber(action:match("%d+"))
@@ -263,29 +278,32 @@ while true do
                             for _, ci in ipairs(cart) do totalCost = totalCost + (ci.item.price * ci.qty) end
                             if currentUser.balance < totalCost then showMsg("ОШИБКА", "Недостаточно средств!", true)
                             else
+                                -- ФИЗИЧЕСКАЯ ВЫДАЧА КОРЗИНЫ
+                                local all_ok = true
+                                for _, ci in ipairs(cart) do
+                                    local ok, msg = me.buyItem(ci.item.db_slot, ci.qty)
+                                    if not ok then all_ok = false end
+                                end
+                                
                                 currentUser.balance = currentUser.balance - totalCost
                                 cart = {}
                                 saveUser(); saveShop()
-                                showMsg("ОПЛАТА", "Покупки успешно оформлены!", false)
+                                
+                                if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false)
+                                else showMsg("ОШИБКА", "Оплата прошла, но некоторые предметы не выданы!", true) end
                             end
                         end
                     end
 
+                -- === АДМИН ПАНЕЛЬ ===
                 elseif string.match(state, "admin") then
                     if action == "adm_cat" then state = "admin_cat"; refreshScreen()
                     elseif action == "adm_item" then state = "admin_item"; refreshScreen()
                     elseif action == "adm_buy" then state = "admin_buy"; refreshScreen()
                     
                     elseif action == "adm_add" then
-                        if state == "admin_cat" then
-                            -- Для категорий оставим старый ввод (это редко нужно)
-                            component.gpu.setBackground(0x000000); term.clear()
-                            print("Введите название новой категории:"); io.write("> ")
-                            local cat = io.read()
-                            if cat and cat ~= "" then table.insert(categories, cat); saveShop() end
-                            refreshScreen()
-                        elseif state == "admin_item" or state == "admin_buy" then
-                            admin_add_target = (state == "admin_item") and "item" or "buyback"
+                        if state == "admin_item" or state == "admin_buy" then
+                            ed_data.target = (state == "admin_item") and "item" or "buyback"
                             state = "admin_wait_scan"
                             gui.drawNotification("СКАНИРОВАНИЕ", "Положите 1 предмет в сундук и нажмите ОК", false)
                         end
@@ -295,28 +313,6 @@ while true do
                         if state == "admin_cat" then table.remove(categories, idx)
                         elseif state == "admin_item" then table.remove(shop_items, idx)
                         elseif state == "admin_buy" then table.remove(shop_buyback, idx) end
-                        saveShop(); refreshScreen()
-                        
-                    elseif action:match("adm_edit_") then
-                        -- РЕДАКТИРОВАНИЕ ТЕЖЕ КРАСИВЫМ ОКНОМ
-                        local idx = tonumber(action:match("%d+"))
-                        if state == "admin_item" then
-                            local itm = shop_items[idx]
-                            local nx, ny, px, py, cx, cy, w = gui.drawEditor("РЕДАКТИРОВАНИЕ", itm.orig_label or itm.name, true)
-                            local n = readGUIInput(nx, ny, w, itm.name)
-                            local p = readGUIInput(px, py, w, tostring(itm.price))
-                            local cat = readGUIInput(cx, cy, w, itm.category)
-                            if n ~= "" then itm.name = n end
-                            if tonumber(p) then itm.price = tonumber(p) end
-                            if cat ~= "" then itm.category = cat end
-                        elseif state == "admin_buy" then
-                            local itm = shop_buyback[idx]
-                            local nx, ny, px, py, _, _, w = gui.drawEditor("РЕДАКТИРОВАНИЕ", itm.orig_label or itm.name, false)
-                            local n = readGUIInput(nx, ny, w, itm.name)
-                            local p = readGUIInput(px, py, w, tostring(itm.price))
-                            if n ~= "" then itm.name = n end
-                            if tonumber(p) then itm.price = tonumber(p) end
-                        end
                         saveShop(); refreshScreen()
                     end
                 end
