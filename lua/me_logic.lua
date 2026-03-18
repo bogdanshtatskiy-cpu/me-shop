@@ -100,26 +100,30 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- ВЫДАЧА ПРЕДМЕТА ИЗ МЭ В СУНДУК
-function me.buyItem(db_slot, qty)
-    if not me.me_net or not me.db then return false, "МЭ или БД не подключены!" end
-    if not db_slot then return false, "Товар не привязан к Базе Данных!" end
+-- === ИСПРАВЛЕННАЯ ВЫДАЧА (С РЕЗЕРВНЫМ ID) ===
+function me.buyItem(item, qty)
+    if not me.me_net then return false, "МЭ Интерфейс не подключен!" end
+    if not item.id then return false, "Ошибка: у товара нет ID!" end
     
-    -- Получаем данные от OpenComputers (ID лежит в name)
-    local oc_item = me.db.get(db_slot)
-    if not oc_item then return false, "Слот в БД пуст!" end
-    
-    -- Конвертируем формат OC в формат AE2 (меняем name на id)
+    -- Резервный слепок (всегда сработает, даже если БД пуста)
     local ae2_fingerprint = {
-        id = oc_item.name,
-        damage = oc_item.damage,
-        label = oc_item.label,
-        hasTag = oc_item.hasTag
+        id = item.id,
+        damage = item.damage or 0
     }
+    
+    -- Если есть БД, пытаемся прочитать теги (NBT)
+    if me.db and item.db_slot then
+        local oc_item = me.db.get(item.db_slot)
+        -- Проверяем, что БД вернула нормальную таблицу с именем, а не пустышку
+        if type(oc_item) == "table" and oc_item.name then
+            ae2_fingerprint.id = oc_item.name
+            ae2_fingerprint.damage = oc_item.damage or ae2_fingerprint.damage
+            ae2_fingerprint.hasTag = oc_item.hasTag
+        end
+    end
     
     local result, reason
     local ok, err = pcall(function()
-        -- Отправляем исправленный отпечаток в МЭ сеть
         result, reason = me.me_net.exportItem(ae2_fingerprint, me.config.out_chest_side, qty)
     end)
     
@@ -128,7 +132,7 @@ function me.buyItem(db_slot, qty)
     if type(result) == "table" and result.size and result.size > 0 then return true, "Выдано"
     elseif type(result) == "number" and result > 0 then return true, "Выдано"
     elseif result == true then return true, "Выдано"
-    else return false, tostring(reason or "Сундук полон или нет товара в МЭ!") end
+    else return false, tostring(reason or "Нет товара в МЭ или сундук полон!") end
 end
 
 return me
