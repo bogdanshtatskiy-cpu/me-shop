@@ -1,4 +1,5 @@
 -- /lua/main.lua
+local component = require("component") -- ВОТ ЭТА СТРОЧКА БЫЛА ПРОПУЩЕНА!
 local event = require("event")
 local os = require("os")
 local io = require("io")
@@ -7,8 +8,8 @@ local gui = require("gui")
 local computer = require("computer")
 local config = require("config")
 local me = require("me_logic")
-local network = require("network") -- ПОДКЛЮЧЕН ИНТЕРНЕТ
-local json = require("json")       -- ПОДКЛЮЧЕН ПАРСЕР JSON
+local network = require("network")
+local json = require("json")
 
 os.execute("set +c")
 local me_ok, me_msg = me.init()
@@ -16,7 +17,6 @@ local me_ok, me_msg = me.init()
 local OWNER_NAME = "Администратор"
 if config.admins then for k, v in pairs(config.admins) do OWNER_NAME = k; break end end
 
--- ГЛОБАЛЬНЫЕ ДАННЫЕ МАГАЗИНА (Будут грузиться из БД)
 local shop_items = {}
 local shop_buyback = {}
 local categories = {"ВСЕ", "Ресурсы", "Механизмы", "Броня"}
@@ -29,7 +29,7 @@ local selectedItem = nil
 local selectedQty = 1
 local isCartMode = false
 local cart = {}
-local admin_add_target = "item" -- Куда добавляем предмет ("item" или "buyback")
+local admin_add_target = "item"
 
 -- === ФУНКЦИИ БАЗЫ ДАННЫХ ===
 local function saveShop()
@@ -55,7 +55,7 @@ local function loadDB()
         end
     else
         print("База пуста или недоступна. Создаем новую.")
-        saveShop() -- Если пусто, создаем базовую структуру
+        saveShop()
     end
 end
 
@@ -100,7 +100,6 @@ local function showMsg(title, text, isError)
     gui.drawNotification(title, text, isError)
 end
 
--- Запуск
 loadDB()
 refreshScreen()
 
@@ -122,14 +121,11 @@ while true do
             if action then
                 computer.beep(1000, 0.05)
                 
-                -- ГЛОБАЛЬНЫЕ КНОПКИ УПРАВЛЕНИЯ
                 if action == "close_admin" then state = "shop"; refreshScreen()
                 elseif action == "open_cart" then state = "cart"; refreshScreen()
                 
-                -- ИСПРАВЛЕННАЯ ЛОГИКА ОКНА "ОК" (close_modal)
                 elseif action == "close_modal" then
                     if state == "admin_wait_scan" then
-                        -- ЕСЛИ ЖДАЛИ СКАНА - ВЫПОЛНЯЕМ ЕГО
                         local stack, err = me.peekInput()
                         if not stack then
                             state = (admin_add_target == "item") and "admin_item" or "admin_buy"
@@ -145,7 +141,7 @@ while true do
                                 else
                                     table.insert(shop_buyback, { name = n, price = tonumber(p) })
                                 end
-                                saveShop() -- СОХРАНЯЕМ В БАЗУ ДАННЫХ
+                                saveShop()
                                 state = (admin_add_target == "item") and "admin_item" or "admin_buy"
                                 refreshScreen()
                             else
@@ -154,16 +150,13 @@ while true do
                             end
                         end
                     else
-                        -- ОБЫЧНОЕ ЗАКРЫТИЕ ОКНА
                         state = "shop"; refreshScreen()
                     end
                 
-                -- === ОСНОВНОЙ МАГАЗИН ===
                 elseif state == "shop" then
                     if action == "login" then
                         local is_adm = false; if config.admins and config.admins[player_name] then is_adm = true end
                         
-                        -- ЗАГРУЖАЕМ БАЛАНС ИГРОКА ИЗ БАЗЫ
                         local succ, res = network.get("/users/" .. player_name)
                         local bal = 0
                         if succ and res and res ~= "null" then
@@ -183,7 +176,7 @@ while true do
                             local success, msg, earned = me.sellAll(shop_buyback)
                             if success then 
                                 currentUser.balance = currentUser.balance + earned
-                                saveUser() -- СОХРАНЯЕМ БАЛАНС В БД
+                                saveUser()
                                 showMsg("УСПЕХ", msg .. " +" .. earned .. " ЭМ", false)
                             else showMsg("ОШИБКА", msg, true) end
                         end
@@ -203,7 +196,6 @@ while true do
                         end
                     end
                 
-                -- === ПОКУПКА ===
                 elseif state == "modal_qty" then
                     if action == "qty_add1" then selectedQty = selectedQty + 1
                     elseif action == "qty_sub1" then selectedQty = selectedQty - 1
@@ -218,8 +210,8 @@ while true do
                         else
                             currentUser.balance = currentUser.balance - cost
                             selectedItem.stock = selectedItem.stock - selectedQty
-                            saveUser() -- ОБНОВЛЯЕМ БАЛАНС
-                            saveShop() -- ОБНОВЛЯЕМ КОЛ-ВО НА СКЛАДЕ
+                            saveUser()
+                            saveShop()
                             showMsg("УСПЕХ", "Куплено " .. selectedQty .. " шт.", false)
                         end
                     end
@@ -227,7 +219,6 @@ while true do
                     if selectedQty > 64 then selectedQty = 64 end
                     if state == "modal_qty" then refreshScreen() end
                 
-                -- === КОРЗИНА ===
                 elseif state == "cart" then
                     if action:match("cart_del_") then
                         local idx = tonumber(action:match("%d+"))
@@ -240,7 +231,6 @@ while true do
                             if currentUser.balance < totalCost then showMsg("ОШИБКА", "Недостаточно средств!", true)
                             else
                                 currentUser.balance = currentUser.balance - totalCost
-                                -- В идеале тут должен быть цикл выдачи каждого предмета из корзины
                                 for _, ci in ipairs(cart) do ci.item.stock = ci.item.stock - ci.qty end
                                 cart = {}
                                 saveUser(); saveShop()
@@ -249,13 +239,11 @@ while true do
                         end
                     end
 
-                -- === АДМИН ПАНЕЛЬ ===
                 elseif string.match(state, "admin") then
                     if action == "adm_cat" then state = "admin_cat"; refreshScreen()
                     elseif action == "adm_item" then state = "admin_item"; refreshScreen()
                     elseif action == "adm_buy" then state = "admin_buy"; refreshScreen()
                     
-                    -- ДОБАВЛЕНИЕ
                     elseif action == "adm_add" then
                         if state == "admin_cat" then
                             local cat = askText("Введите название новой категории:")
@@ -267,7 +255,6 @@ while true do
                             gui.drawNotification("СКАНИРОВАНИЕ", "Положите 1 предмет в сундук и нажмите ОК", false)
                         end
                         
-                    -- УДАЛЕНИЕ
                     elseif action:match("adm_del_") then
                         local idx = tonumber(action:match("%d+"))
                         if state == "admin_cat" then table.remove(categories, idx)
@@ -275,7 +262,6 @@ while true do
                         elseif state == "admin_buy" then table.remove(shop_buyback, idx) end
                         saveShop(); refreshScreen()
                         
-                    -- РЕДАКТИРОВАНИЕ
                     elseif action:match("adm_edit_") then
                         local idx = tonumber(action:match("%d+"))
                         if state == "admin_cat" then
