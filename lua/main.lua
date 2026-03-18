@@ -29,7 +29,6 @@ local selectedQty = 1
 local isCartMode = false
 local cart = {}
 
--- Переменные редактора
 local ed_data = {}
 
 local function saveShop()
@@ -50,9 +49,7 @@ local function loadDB()
             if parsed.items then shop_items = parsed.items end
             if parsed.buyback then shop_buyback = parsed.buyback end
         end
-    else
-        saveShop()
-    end
+    else saveShop() end
 end
 
 local function getFreeDBSlot()
@@ -102,7 +99,8 @@ loadDB()
 refreshScreen()
 
 while true do
-    local ev, _, x, y, button, player_name = event.pull(1)
+    -- Получаем "сырые" аргументы, чтобы разобрать их правильно
+    local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
     
     if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
         if not ev then 
@@ -112,22 +110,34 @@ while true do
         else idleTimer = 30 end
     end
 
-    -- ОБРАБОТКА ВВОДА С КЛАВИАТУРЫ ДЛЯ РЕДАКТОРА
+    -- === ОБРАБОТКА ВВОДА С КЛАВИАТУРЫ ===
     if ev == "key_down" and state == "editor" then
-        local char, code = y, button -- В event.pull для key_down x=char, y=code
-        local val = (ed_data.focus == "name") and ed_data.name or ed_data.price
+        local char = arg1
+        local code = arg2
+        local val = (ed_data.focus == "name") and ed_data.name or tostring(ed_data.price)
         
-        if code == 14 then -- Backspace
-            val = unicode.sub(val, 1, -2)
-        elseif char >= 32 then
+        if code == 14 then -- Нажат Backspace
+            if unicode.len(val) > 0 then val = unicode.sub(val, 1, -2) end
+        elseif char >= 32 then -- Нажата обычная буква или цифра
             val = val .. unicode.char(char)
         end
         
         if ed_data.focus == "name" then ed_data.name = val else ed_data.price = val end
         refreshScreen()
-    end
+        
+    -- === ОБРАБОТКА ВСТАВКИ ТЕКСТА (БУФЕР ОБМЕНА) ===
+    elseif ev == "clipboard" and state == "editor" then
+        local text = arg1
+        if ed_data.focus == "name" then ed_data.name = ed_data.name .. text
+        else ed_data.price = tostring(ed_data.price) .. text end
+        refreshScreen()
 
-    if ev == "touch" then
+    -- === ОБРАБОТКА КЛИКОВ ПО ЭКРАНУ ===
+    elseif ev == "touch" then
+        local x = arg1
+        local y = arg2
+        local player_name = arg4
+
         if currentUser and currentUser.name ~= player_name then computer.beep(400, 0.1)
         else
             local action = gui.checkClick(x, y)
@@ -144,13 +154,12 @@ while true do
                             state = (ed_data.target == "item") and "admin_item" or "admin_buy"
                             showMsg("ОШИБКА СКАНЕРА", slot, true)
                         else
-                            -- ОТКРЫВАЕМ ВСТРОЕННЫЙ РЕДАКТОР
                             ed_data.isItem = (ed_data.target == "item")
                             ed_data.orig_name = stack.label
                             ed_data.orig_id = stack.name
                             ed_data.name = stack.label
                             ed_data.price = ""
-                            ed_data.cat = categories[2]
+                            ed_data.cat = categories[2] or "ВСЕ"
                             ed_data.focus = "name"
                             ed_data.slot = slot
                             state = "editor"; refreshScreen()
@@ -159,7 +168,6 @@ while true do
                         state = "shop"; refreshScreen()
                     end
                 
-                -- === РЕДАКТОР ===
                 elseif state == "editor" then
                     if action == "focus_name" then ed_data.focus = "name"; refreshScreen()
                     elseif action == "focus_price" then ed_data.focus = "price"; refreshScreen()
@@ -170,8 +178,8 @@ while true do
                         state = (ed_data.target == "item") and "admin_item" or "admin_buy"
                         refreshScreen()
                     elseif action == "ed_save" then
-                        -- ЗАМЕНА ЗАПЯТОЙ НА ТОЧКУ В ЦЕНЕ
-                        local p_str = ed_data.price:gsub(",", ".")
+                        -- Поддержка и точки, и запятой в ценах (1,5 = 1.5)
+                        local p_str = tostring(ed_data.price):gsub(",", ".")
                         if p_str == "" or not tonumber(p_str) then
                             showMsg("ОШИБКА", "Введите корректную цену (число)!", true)
                         else
@@ -197,7 +205,6 @@ while true do
                         end
                     end
                 
-                -- === МАГАЗИН ===
                 elseif state == "shop" then
                     if action == "login" then
                         local is_adm = false; if config.admins and config.admins[player_name] then is_adm = true end
@@ -238,7 +245,6 @@ while true do
                         end
                     end
                 
-                -- === ОКНО КОЛИЧЕСТВА ===
                 elseif state == "modal_qty" then
                     if action == "qty_add1" then selectedQty = selectedQty + 1
                     elseif action == "qty_sub1" then selectedQty = selectedQty - 1
@@ -251,22 +257,18 @@ while true do
                         if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
                         elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало ЭМ!", true)
                         else
-                            -- ФИЗИЧЕСКАЯ ВЫДАЧА
                             local ok, msg = me.buyItem(selectedItem.db_slot, selectedQty)
                             if ok then
                                 currentUser.balance = currentUser.balance - cost
                                 saveUser(); saveShop()
                                 showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false)
-                            else
-                                showMsg("ОШИБКА ВЫДАЧИ", msg, true)
-                            end
+                            else showMsg("ОШИБКА ВЫДАЧИ", msg, true) end
                         end
                     end
                     if selectedQty < 1 then selectedQty = 1 end
                     if selectedQty > 64 then selectedQty = 64 end
                     if state == "modal_qty" then refreshScreen() end
                 
-                -- === КОРЗИНА ===
                 elseif state == "cart" then
                     if action:match("cart_del_") then
                         local idx = tonumber(action:match("%d+"))
@@ -278,7 +280,6 @@ while true do
                             for _, ci in ipairs(cart) do totalCost = totalCost + (ci.item.price * ci.qty) end
                             if currentUser.balance < totalCost then showMsg("ОШИБКА", "Недостаточно средств!", true)
                             else
-                                -- ФИЗИЧЕСКАЯ ВЫДАЧА КОРЗИНЫ
                                 local all_ok = true
                                 for _, ci in ipairs(cart) do
                                     local ok, msg = me.buyItem(ci.item.db_slot, ci.qty)
@@ -295,7 +296,6 @@ while true do
                         end
                     end
 
-                -- === АДМИН ПАНЕЛЬ ===
                 elseif string.match(state, "admin") then
                     if action == "adm_cat" then state = "admin_cat"; refreshScreen()
                     elseif action == "adm_item" then state = "admin_item"; refreshScreen()
