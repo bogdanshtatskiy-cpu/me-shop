@@ -7,8 +7,8 @@ me.t = nil
 me.db = nil     
 
 me.config = { 
-    chest_side = sides.up,    -- Для скупки (сундук сверху от транспоузера)
-    me_side = sides.down      -- Для скупки (МЭ снизу от транспоузера)
+    chest_side = sides.up,    
+    me_side = sides.down      
 }
 
 function me.init()
@@ -20,6 +20,7 @@ function me.init()
     return true, "МЭ компоненты готовы."
 end
 
+-- === ИСПРАВЛЕННЫЙ ПОДСЧЕТ ТОВАРОВ В МЭ (Учет метадаты) ===
 function me.updateStock(shop_items)
     local lookup = {}
     for addr in component.list("me_interface") do
@@ -27,8 +28,9 @@ function me.updateStock(shop_items)
         local ok, net_items = pcall(me_proxy.getItemsInNetwork)
         if ok and net_items then
             for _, n_item in ipairs(net_items) do
-                local key_name = n_item.name or n_item.label or "unknown"
-                local key = key_name .. "_" .. (n_item.label or "")
+                -- Создаем уникальный ключ: "minecraft:planks:2"
+                local dmg = math.floor(n_item.damage or 0)
+                local key = (n_item.name or "unknown") .. ":" .. dmg
                 lookup[key] = (lookup[key] or 0) + n_item.size
             end
             break 
@@ -36,11 +38,14 @@ function me.updateStock(shop_items)
     end
 
     for _, s_item in ipairs(shop_items) do
-        local key = s_item.id .. "_" .. (s_item.orig_label or "")
+        -- Ищем по такому же ключу в магазине
+        local dmg = math.floor(s_item.damage or 0)
+        local key = (s_item.id or "unknown") .. ":" .. dmg
         s_item.stock = lookup[key] or 0
     end
 end
 
+-- === ИСПРАВЛЕННАЯ СКУПКА (Жесткая проверка ID + Damage) ===
 function me.sellAll(buyback_list)
     if not me.t then return false, "Транспоузер не подключен!", 0 end
 
@@ -54,7 +59,11 @@ function me.sellAll(buyback_list)
         if stack and stack.size > 0 then
             local matched_item = nil
             for _, b_item in ipairs(buyback_list) do
-                if stack.name == b_item.id or stack.label == b_item.orig_label then
+                -- Сверяем и текстовый ID, и УРОН (damage)
+                local stack_dmg = math.floor(stack.damage or 0)
+                local b_dmg = math.floor(b_item.damage or 0)
+                
+                if stack.name == b_item.id and stack_dmg == b_dmg then
                     matched_item = b_item; break
                 end
             end
@@ -98,7 +107,6 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === УМНАЯ ВЫДАЧА (Пробивает все интерфейсы и все стороны) ===
 function me.buyItem(item, qty)
     if not me.db then return false, "БД не подключена!" end
     if not item.db_slot then return false, "Товар не привязан к БД! Передобавьте его." end
@@ -112,11 +120,8 @@ function me.buyItem(item, qty)
     local success = false
     local last_err = "Сундук не найден ни с одной стороны!"
 
-    -- Опрашиваем все интерфейсы
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
-        
-        -- Опрашиваем все 6 сторон (от 0 до 5)
         for side = 0, 5 do
             local ok, result, reason = pcall(function()
                 return me_proxy.exportItem(perfect_fingerprint, side, qty)
@@ -126,7 +131,7 @@ function me.buyItem(item, qty)
                 success = true
                 break
             elseif not ok then
-                last_err = tostring(result) -- Ловим ошибку мода, но продолжаем искать
+                last_err = tostring(result) 
             end
         end
         if success then break end
