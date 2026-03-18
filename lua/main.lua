@@ -11,7 +11,6 @@ local me = require("me_logic")
 local network = require("network")
 local json = require("json")
 
--- УДАЛИЛ БАГОВАННУЮ СТРОЧКУ os.execute("set +c")
 local me_ok, me_msg = me.init()
 
 local OWNER_NAME = "Администратор"
@@ -59,7 +58,6 @@ local function saveUser()
     pcall(function() network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end)
 end
 
--- ЛОКАЛЬНОЕ СОХРАНЕНИЕ МАГАЗИНА
 local function loadShopLocal()
     local f = io.open("/home/shop_data.json", "r")
     if f then
@@ -81,19 +79,14 @@ end
 local function saveShop()
     local data = { categories = categories, items = shop_items, buyback = shop_buyback }
     local encoded = json.encode(data)
-    
-    -- Сохраняем на жесткий диск компа
     local f = io.open("/home/shop_data.json", "w")
     if f then f:write(encoded); f:close() end
-    
-    -- Синхронизируем с Firebase
     pcall(function() network.put("/shop", encoded) end)
 end
 
 local function loadDB()
     loadUsers()
     if not loadShopLocal() then
-        -- Если локального файла нет, пытаемся скачать из сети
         local succ, res = network.get("/shop")
         if succ and res and res ~= "null" then
             local parsed = json.decode(res)
@@ -101,7 +94,7 @@ local function loadDB()
                 if parsed.categories then categories = parsed.categories end
                 if parsed.items then shop_items = parsed.items end
                 if parsed.buyback then shop_buyback = parsed.buyback end
-                saveShop() -- Создаем локальную копию
+                saveShop()
             end
         else saveShop() end
     end
@@ -125,7 +118,16 @@ local function refreshScreen()
         end
         gui.drawItems(filtered)
         gui.drawBuybackItems(shop_buyback, currentUser ~= nil)
-        if not me_ok then component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg) end
+        
+        -- Вызов калибровки
+        if not me_ok then 
+            if me_msg == "ТРЕБУЕТСЯ КАЛИБРОВКА" then
+                state = "calibration_wait"
+                gui.drawNotification("КАЛИБРОВКА", "Положите 1 любой блок в сундук СКУПКИ (Левый) и нажмите ОК", false)
+            else
+                component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg)
+            end
+        end
         
     elseif state == "modal_qty" then
         gui.drawStatic(currentUser, idleTimer, #cart)
@@ -156,7 +158,7 @@ refreshScreen()
 while true do
     local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
     
-    if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
+    if currentUser and state ~= "modal_msg" and state ~= "calibration_wait" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
         if not ev then 
             idleTimer = idleTimer - 1
             if idleTimer <= 0 then currentUser = nil; cart = {}; state = "shop"; active_category = "ВСЕ" end
@@ -192,7 +194,17 @@ while true do
                 elseif action == "open_cart" then state = "cart"; refreshScreen()
                 
                 elseif action == "close_modal" then
-                    if state == "admin_wait_scan" then
+                    if state == "calibration_wait" then
+                        local ok, msg = me.calibrate()
+                        if ok then
+                            me_ok, me_msg = me.init()
+                            state = "shop"
+                            showMsg("УСПЕХ", msg, false)
+                        else
+                            state = "calibration_wait"
+                            showMsg("ОШИБКА", msg, true)
+                        end
+                    elseif state == "admin_wait_scan" then
                         local stack, slot = me.peekInput()
                         if not stack then
                             state = (ed_data.target == "item") and "admin_item" or "admin_buy"
@@ -254,10 +266,8 @@ while true do
                 elseif state == "shop" then
                     if action == "login" then
                         local is_adm = false; if config.admins and config.admins[player_name] then is_adm = true end
-                        
                         local bal = 0
-                        if users_db[player_name] then
-                            bal = users_db[player_name].balance
+                        if users_db[player_name] then bal = users_db[player_name].balance
                         else
                             local succ, res = network.get("/users/" .. player_name)
                             if succ and res and res ~= "null" then
@@ -265,7 +275,6 @@ while true do
                                 if udata and udata.balance then bal = udata.balance end
                             end
                         end
-                        
                         currentUser = { name = player_name, balance = bal, isAdmin = is_adm }; idleTimer = 30; refreshScreen()
                     
                     elseif action == "logout" then currentUser = nil; cart = {}; refreshScreen()
