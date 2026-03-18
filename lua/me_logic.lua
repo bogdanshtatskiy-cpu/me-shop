@@ -1,21 +1,21 @@
 -- /lua/me_logic.lua
 local component = require("component")
 local sides = require("sides")
+local os = require("os")
 
 local me = {}
-
 me.t = nil      
 me.db = nil     
 
 me.config = { 
-    chest_side = sides.up,    -- Левый сундук (скупка) сверху от Транспоузера
-    me_side = sides.down      -- МЭ Интерфейс (скупка) снизу от Транспоузера
+    chest_side = sides.up,    
+    me_side = sides.down      
 }
 
 function me.init()
     if component.isAvailable("transposer") then me.t = component.transposer end
     if component.isAvailable("database") then me.db = component.database end
-
+    
     if not me.t then return false, "Транспоузер не найден!" end
     if not component.isAvailable("me_interface") then return false, "МЭ Интерфейс не найден!" end
     return true, "МЭ компоненты готовы."
@@ -97,41 +97,38 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === ИДЕАЛЬНАЯ ВЫДАЧА (Адаптер + RAW таблица) ===
+-- === ГЕНИАЛЬНАЯ ВЫДАЧА (Используем механику авто-выталкивания AE2) ===
 function me.buyItem(item, qty)
     if not me.db then return false, "БД не подключена!" end
-    if not item.db_slot then return false, "Товар не привязан к БД! Передобавьте его." end
+    if not item.db_slot then return false, "Товар не привязан к БД!" end
     
-    -- Берем сырую, оригинальную таблицу из Улучшения "База Данных"
-    local raw_fp = me.db.get(item.db_slot)
-    if type(raw_fp) ~= "table" or not raw_fp.name then return false, "Слот БД пуст! Передобавьте товар." end
-    
-    -- ВАЖНО: Добавляем ID прямо в оригинальную таблицу, сохраняя все скрытые хэши мода!
-    raw_fp.id = raw_fp.name 
-    
-    local success = false
-    local last_err = "Сундук не найден"
-
-    -- Перебираем все интерфейсы и все стороны, чтобы найти тот, который выдаст в сундук
+    -- 1. Сначала очищаем все МЭ Интерфейсы на всякий случай
     for addr in component.list("me_interface") do
-        local me_proxy = component.proxy(addr)
-        for side = 0, 5 do
-            local ok, result, reason = pcall(function()
-                return me_proxy.exportItem(raw_fp, side, qty)
-            end)
-            
-            if ok and (result == true or (type(result) == "table" and result.size and result.size > 0) or (type(result) == "number" and result > 0)) then
-                success = true
-                break
-            elseif not ok then
-                last_err = tostring(result)
-            end
-        end
-        if success then break end
+        pcall(function() component.proxy(addr).setInterfaceConfiguration(1) end)
     end
     
-    if success then return true, "Выдано"
-    else return false, "Ошибка мода: " .. last_err end
+    -- 2. Настраиваем ВСЕ МЭ Интерфейсы держать этот предмет
+    -- Тот интерфейс, над которым стоит Сундук, моментально выкинет его туда!
+    -- А левый интерфейс (над которым Транспоузер) просто подержит его в себе и ничего не выкинет.
+    local configured = false
+    for addr in component.list("me_interface") do
+        local ok = pcall(function() 
+            component.proxy(addr).setInterfaceConfiguration(1, me.db.address, item.db_slot, qty) 
+        end)
+        if ok then configured = true end
+    end
+    
+    if not configured then return false, "Не удалось настроить МЭ Интерфейсы!" end
+
+    -- 3. Ждем 2.5 секунды, чтобы МЭ сеть успела перекачать стак предметов в сундук
+    os.sleep(2.5)
+
+    -- 4. Очищаем настройку. Если что-то не влезло в сундук, интерфейс засосет это обратно в сеть.
+    for addr in component.list("me_interface") do
+        pcall(function() component.proxy(addr).setInterfaceConfiguration(1) end)
+    end
+    
+    return true, "Успешно отправлено в сундук!"
 end
 
 return me
