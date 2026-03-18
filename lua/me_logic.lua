@@ -150,7 +150,7 @@ function me.buyItem(item, qty)
     if not item.db_slot then return false, "Товар не привязан к БД!" end
     if not me.t_out then return false, "Транспоузер выдачи не найден!" end
     
-    -- Очищаем все интерфейсы
+    -- Очищаем интерфейсы
     for addr in component.list("me_interface") do
         pcall(function() component.proxy(addr).setInterfaceConfiguration(1) end)
     end
@@ -168,29 +168,26 @@ function me.buyItem(item, qty)
     local moved = 0
     local attempts = 0
     
-    -- СЛЕПОЙ ПЫЛЕСОС: Качаем всё, не проверяя, что там лежит
-    while moved < qty and attempts < 20 do
-        os.sleep(0.25) -- Ждем 5 тиков, пока МЭ сеть перекинет предмет
-        
-        -- В AE2 предметы обычно падают в слоты с 1 по 18
-        for slot = 1, 18 do
-            local actual = me.t_out.transferItem(me.config.me_side, me.config.chest_side, qty - moved, slot)
-            if type(actual) == "number" and actual > 0 then 
+    -- Запрашиваем реальное количество слотов (обычно 9)
+    local ok_inv, inv_size = pcall(me.t_out.getInventorySize, me.config.me_side)
+    if not ok_inv or not inv_size or inv_size == 0 then inv_size = 9 end
+    
+    -- БЕЗОПАСНЫЙ СЛЕПОЙ ПЫЛЕСОС
+    while moved < qty and attempts < 15 do
+        os.sleep(0.25)
+        for slot = 1, inv_size do
+            -- Завернуто в защитный купол pcall! Больше никаких крашей!
+            local ok, actual = pcall(me.t_out.transferItem, me.config.me_side, me.config.chest_side, qty - moved, slot)
+            if ok and type(actual) == "number" and actual > 0 then 
                 moved = moved + actual 
             end
             if moved >= qty then break end
         end
-        
-        -- Резервный метод: качаем без указания слота
-        if moved < qty then
-            local actual = me.t_out.transferItem(me.config.me_side, me.config.chest_side, qty - moved)
-            if type(actual) == "number" and actual > 0 then moved = moved + actual end
-        end
-        
+        if moved >= qty then break end
         attempts = attempts + 1
     end
 
-    -- Очищаем интерфейс
+    -- Очищаем настройку
     for addr in component.list("me_interface") do
         pcall(function() component.proxy(addr).setInterfaceConfiguration(1) end)
     end
