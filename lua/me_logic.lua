@@ -145,13 +145,12 @@ function me.storeToDB(chest_slot, db_slot)
     return me.t_in.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
 end
 
--- === ИДЕАЛЬНАЯ ВЫДАЧА (МЭ Интерфейс -> Транспоузер -> Сундук) ===
 function me.buyItem(item, qty)
     if not me.db then return false, "БД не подключена!" end
     if not item.db_slot then return false, "Товар не привязан к БД!" end
     if not me.t_out then return false, "Транспоузер выдачи не найден!" end
     
-    -- Очищаем интерфейсы
+    -- Очищаем интерфейсы от старого мусора
     for addr in component.list("me_interface") do
         pcall(function() component.proxy(addr).setInterfaceConfiguration(1) end)
     end
@@ -166,19 +165,20 @@ function me.buyItem(item, qty)
     end
     if not configured then return false, "Не удалось настроить МЭ Интерфейсы!" end
 
-    -- Ждем, пока предметы упадут в интерфейс
+    -- Ждем чуть дольше, чтобы сеть точно переложила предметы в буфер интерфейса
     os.sleep(1.5)
 
-    -- Правый Транспоузер выкачивает их в сундук
     local moved = 0
     local attempts = 0
-    local inv_size = me.t_out.getInventorySize(me.config.me_side) or 36
+    local inv_size = me.t_out.getInventorySize(me.config.me_side)
+    if not inv_size or inv_size == 0 then inv_size = 36 end
     
-    while moved < qty and attempts < 10 do
+    -- ВЫКАЧИВАЕМ ВСЁ, ЧТО ВИДИМ В ИНТЕРФЕЙСЕ (без проверок названий)
+    while moved < qty and attempts < 15 do
         for slot = 1, inv_size do
             local stack = me.t_out.getStackInSlot(me.config.me_side, slot)
-            -- Выкачиваем только если это наш предмет (чтобы случайно не забрать лишнее)
-            if stack and stack.size > 0 and stack.name == item.id then
+            -- Если есть хоть какой-то предмет - качаем наверх!
+            if stack and stack.size > 0 then
                 local to_move = math.min(qty - moved, stack.size)
                 local actual = me.t_out.transferItem(me.config.me_side, me.config.chest_side, to_move, slot)
                 if type(actual) == "number" then moved = moved + actual
@@ -191,7 +191,7 @@ function me.buyItem(item, qty)
         attempts = attempts + 1
     end
 
-    -- Очищаем настройку (МЭ сеть всосет остатки обратно)
+    -- Очищаем настройку (МЭ сеть всосет излишки обратно, если они были)
     for addr in component.list("me_interface") do
         pcall(function() component.proxy(addr).setInterfaceConfiguration(1) end)
     end
