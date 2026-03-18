@@ -33,7 +33,7 @@ end
 function gui.drawStatic(user, timer, cart_count)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, rightColX - 1, 3, gui.COLORS.panel)
-    text(3, 2, "МЭ МАГАЗИН v3.0", gui.COLORS.energy, gui.COLORS.panel)
+    text(3, 2, "МЭ МАГАЗИН v3.5", gui.COLORS.energy, gui.COLORS.panel)
 
     rect(rightColX, 1, rightColW, H, gui.COLORS.panel)
     local userBoxY = 1
@@ -43,7 +43,6 @@ function gui.drawStatic(user, timer, cart_count)
         center(rightColX, userBoxY + 6, rightColW, user.balance .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
         if timer then center(rightColX, userBoxY + 8, rightColW, "Выход через: " .. timer .. "с", gui.COLORS.label, gui.COLORS.panel) end
         
-        -- Кнопка КОРЗИНЫ
         gui.btn("open_cart", rightColX + 2, userBoxY + 10, rightColW - 4, 3, "КОРЗИНА (" .. (cart_count or 0) .. ")", gui.COLORS.btnActive)
         
         if user.isAdmin then gui.btn("admin_panel", rightColX + 2, userBoxY + 14, rightColW - 4, 1, "АДМИН ПАНЕЛЬ", gui.COLORS.energy) end
@@ -76,7 +75,11 @@ function gui.drawItems(items)
         rect(x, y, tileW, tileH, gui.COLORS.tileBg)
         center(x, y, tileW, item.name, gui.COLORS.text, gui.COLORS.tileHeader)
         text(x + 2, y + 2, "Цена: " .. item.price .. " ЭМ", gui.COLORS.warn, gui.COLORS.tileBg)
-        text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0) .. " шт", gui.COLORS.label, gui.COLORS.tileBg)
+        
+        -- Цвет запаса в зависимости от наличия
+        local stockCol = (item.stock and item.stock > 0) and gui.COLORS.label or gui.COLORS.bad
+        text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0) .. " шт", stockCol, gui.COLORS.tileBg)
+        
         gui.btn("buy_"..i, x + 1, y + 4, math.floor(tileW/2)-1, 1, "КУПИТЬ", gui.COLORS.good)
         gui.btn("cart_"..i, x + math.floor(tileW/2) + 1, y + 4, math.floor(tileW/2)-1, 1, "+ КОРЗИНА", gui.COLORS.energy)
         col = col + 1; if col >= cols then col = 0; row = row + 1 end
@@ -93,7 +96,6 @@ function gui.drawBuybackItems(buyback_items, isUserLogged)
     gui.btn("sell_all", x, H - 3, w, 3, "ПРОДАТЬ ВСЁ", gui.COLORS.good)
 end
 
--- ВСПЛЫВАЮЩИЕ ОКНА
 function gui.drawNotification(title, message, isError)
     gui.buttons = {}; local w = 50; local h = 10; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     local titleCol = isError and gui.COLORS.bad or gui.COLORS.good
@@ -107,7 +109,7 @@ function gui.drawQuantitySelector(item, qty, isCartMode)
     gui.buttons = {}; local w = 40; local h = 12; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     rect(x, y, w, h, gui.COLORS.tileBg); rect(x, y, w, 2, gui.COLORS.tileHeader)
     center(x, y, w, "ВЫБОР: " .. item.name, gui.COLORS.text, gui.COLORS.tileHeader)
-    center(x, y + 3, w, "В наличии: " .. item.stock .. " шт", gui.COLORS.label, gui.COLORS.tileBg)
+    center(x, y + 3, w, "В наличии: " .. (item.stock or 0) .. " шт", gui.COLORS.label, gui.COLORS.tileBg)
     center(x, y + 5, w, "Количество: " .. qty, gui.COLORS.text, gui.COLORS.tileBg)
     center(x, y + 7, w, "Сумма: " .. (item.price * qty) .. " ЭМ", gui.COLORS.warn, gui.COLORS.tileBg)
     gui.btn("qty_sub10", x + 2, y + 5, 5, 1, "-10", gui.COLORS.bad); gui.btn("qty_sub1", x + 8, y + 5, 5, 1, "-1", gui.COLORS.bad)
@@ -119,7 +121,6 @@ function gui.drawQuantitySelector(item, qty, isCartMode)
     gui.btn("close_modal", x + 24, y + 10, 14, 1, "ОТМЕНА", gui.COLORS.bad)
 end
 
--- КОРЗИНА
 function gui.drawCart(cart_items)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     local w = 60; local h = 20; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
@@ -147,7 +148,6 @@ function gui.drawCart(cart_items)
     gui.btn("close_modal", x + 2, y + h - 3, 10, 3, "НАЗАД", gui.COLORS.btn)
 end
 
--- АДМИН ПАНЕЛЬ
 function gui.drawAdmin(substate, list)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, W, 3, gui.COLORS.panel); center(1, 2, W, "ПАНЕЛЬ УПРАВЛЕНИЯ МАГАЗИНОМ", gui.COLORS.energy, gui.COLORS.panel)
@@ -171,6 +171,34 @@ function gui.drawAdmin(substate, list)
         end
     end
     gui.btn("adm_add", 5, H - 3, W - 10, 3, "ДОБАВИТЬ НОВУЮ ЗАПИСЬ", gui.COLORS.good)
+end
+
+-- КРАСИВОЕ ОКНО РЕДАКТОРА
+function gui.drawEditor(title, orig_name, isItem)
+    gui.buttons = {}
+    local w = 50; local h = isItem and 17 or 14
+    local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
+    rect(x, y, w, h, gui.COLORS.tileBg)
+    rect(x, y, w, 2, gui.COLORS.energy)
+    center(x, y, w, title, gui.COLORS.text, gui.COLORS.energy)
+
+    text(x+2, y+3, "Оригинал: " .. orig_name, gui.COLORS.label, gui.COLORS.tileBg)
+
+    text(x+2, y+5, "Название в магазине:", gui.COLORS.text, gui.COLORS.tileBg)
+    rect(x+2, y+6, w-4, 1, gui.COLORS.panel)
+
+    text(x+2, y+8, "Цена (число):", gui.COLORS.text, gui.COLORS.tileBg)
+    rect(x+2, y+9, w-4, 1, gui.COLORS.panel)
+
+    if isItem then
+        text(x+2, y+11, "Категория:", gui.COLORS.text, gui.COLORS.tileBg)
+        rect(x+2, y+12, w-4, 1, gui.COLORS.panel)
+    end
+    
+    center(x, y+h-2, w, "[ Печатайте на клавиатуре. Enter = След. поле ]", gui.COLORS.warn, gui.COLORS.tileBg)
+    
+    -- Возвращаем координаты полей ввода для main.lua
+    return x+2, y+6, x+2, y+9, x+2, y+12, w-4
 end
 
 function gui.checkClick(x, y)
