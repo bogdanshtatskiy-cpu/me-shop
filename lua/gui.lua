@@ -34,7 +34,7 @@ end
 function gui.drawStatic(user, timer, cart_count)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, rightColX - 1, 3, gui.COLORS.panel)
-    center(1, 2, rightColX - 1, "МЭ МАГАЗИН v4.0", gui.COLORS.energy, gui.COLORS.panel)
+    center(1, 2, rightColX - 1, "МЭ МАГАЗИН v4.1", gui.COLORS.energy, gui.COLORS.panel)
 
     rect(rightColX, 1, rightColW, H, gui.COLORS.panel)
     local userBoxY = 1
@@ -140,9 +140,11 @@ function gui.drawCart(cart_items)
         end
     end
     rect(x, y + h - 4, w, 1, gui.COLORS.tileHeader)
-    text(x + 2, y + h - 2, "ИТОГО: " .. totalCost .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
+    
+    -- === ТУТ ИСПРАВЛЕНА ОШИБКА НАЛОЖЕНИЯ ===
+    gui.btn("close_modal", x + 2, y + h - 3, 12, 3, "НАЗАД", gui.COLORS.btn)
+    text(x + 16, y + h - 2, "ИТОГО: " .. totalCost .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
     gui.btn("checkout", x + w - 20, y + h - 3, 18, 3, "ОПЛАТИТЬ", gui.COLORS.good)
-    gui.btn("close_modal", x + 2, y + h - 3, 10, 3, "НАЗАД", gui.COLORS.btn)
 end
 
 function gui.drawAdmin(substate, list)
@@ -168,7 +170,6 @@ function gui.drawAdmin(substate, list)
     gui.btn("adm_add", 5, H - 3, W - 10, 3, "ДОБАВИТЬ НОВУЮ ЗАПИСЬ", gui.COLORS.good)
 end
 
--- ВСТРОЕННЫЙ РЕДАКТОР
 function gui.drawEditorModal(data, categories)
     gui.buttons = {}
     local w = 60; local h = data.isItem and 18 or 14
@@ -180,17 +181,14 @@ function gui.drawEditorModal(data, categories)
     
     text(x+2, y+3, "Оригинал: " .. (data.orig_name or "-"), gui.COLORS.label, gui.COLORS.tileBg)
     
-    -- Поле Название
     text(x+2, y+5, "Название в магазине:", gui.COLORS.text, gui.COLORS.tileBg)
     local bgName = (data.focus == "name") and gui.COLORS.inputFocus or gui.COLORS.inputBg
     gui.btn("focus_name", x+2, y+6, w-4, 1, data.name .. ((data.focus == "name") and "_" or ""), bgName, gui.COLORS.text)
     
-    -- Поле Цена
     text(x+2, y+8, "Цена (число):", gui.COLORS.text, gui.COLORS.tileBg)
     local bgPrice = (data.focus == "price") and gui.COLORS.inputFocus or gui.COLORS.inputBg
     gui.btn("focus_price", x+2, y+9, w-4, 1, data.price .. ((data.focus == "price") and "_" or ""), bgPrice, gui.COLORS.text)
     
-    -- Кнопки категорий
     if data.isItem then
         text(x+2, y+11, "Категория:", gui.COLORS.text, gui.COLORS.tileBg)
         local cx = x+2
