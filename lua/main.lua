@@ -20,6 +20,7 @@ if config.admins then for k, v in pairs(config.admins) do OWNER_NAME = k; break 
 local shop_items = {}
 local shop_buyback = {}
 local categories = {"ВСЕ", "Ресурсы", "Механизмы", "Броня"}
+local users_db = {} -- ЛОКАЛЬНАЯ БАЗА ИГРОКОВ
 
 local active_category = "ВСЕ"
 local currentUser = nil
@@ -36,20 +37,38 @@ local function writeLog(action, user, details)
     local log_line = string.format("[%s] %s | %s | %s", time_str, action, user, details)
     local f = io.open("/home/shop_logs.txt", "a")
     if f then f:write(log_line .. "\n"); f:close() end
-    local log_data = { time = time_str, action = action, user = user, details = details }
-    network.put("/logs/" .. os.time(), json.encode(log_data))
+    pcall(function() network.put("/logs/" .. os.time(), json.encode({ time = time_str, action = action, user = user, details = details })) end)
+end
+
+local function loadUsers()
+    local f = io.open("/home/users.json", "r")
+    if f then
+        local data = f:read("*a")
+        if data and data ~= "" then users_db = json.decode(data) or {} end
+        f:close()
+    end
+end
+
+local function saveUser()
+    if not currentUser then return end
+    if not users_db[currentUser.name] then users_db[currentUser.name] = {} end
+    users_db[currentUser.name].balance = currentUser.balance
+    
+    -- Сохраняем локально (железобетонно)
+    local f = io.open("/home/users.json", "w")
+    if f then f:write(json.encode(users_db)); f:close() end
+    
+    -- Синхронизируем с облаком (если работает)
+    pcall(function() network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end)
 end
 
 local function saveShop()
     local data = { categories = categories, items = shop_items, buyback = shop_buyback }
-    network.put("/shop", json.encode(data))
-end
-
-local function saveUser()
-    if currentUser then network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end
+    pcall(function() network.put("/shop", json.encode(data)) end)
 end
 
 local function loadDB()
+    loadUsers() -- Грузим локальные балансы
     local succ, res = network.get("/shop")
     if succ and res and res ~= "null" then
         local parsed = json.decode(res)
@@ -79,16 +98,7 @@ local function refreshScreen()
         end
         gui.drawItems(filtered)
         gui.drawBuybackItems(shop_buyback, currentUser ~= nil)
-        
-        -- Вызов калибровки
-        if not me_ok then 
-            if me_msg == "ТРЕБУЕТСЯ КАЛИБРОВКА" then
-                state = "calibration_wait"
-                gui.drawNotification("КАЛИБРОВКА", "Положите 1 любой блок в сундук СКУПКИ (Левый) и нажмите ОК", false)
-            else
-                component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg)
-            end
-        end
+        if not me_ok then component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg) end
         
     elseif state == "modal_qty" then
         gui.drawStatic(currentUser, idleTimer, #cart)
@@ -119,7 +129,7 @@ refreshScreen()
 while true do
     local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
     
-    if currentUser and state ~= "modal_msg" and state ~= "calibration_wait" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
+    if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
         if not ev then 
             idleTimer = idleTimer - 1
             if idleTimer <= 0 then currentUser = nil; cart = {}; state = "shop"; active_category = "ВСЕ" end
@@ -155,17 +165,7 @@ while true do
                 elseif action == "open_cart" then state = "cart"; refreshScreen()
                 
                 elseif action == "close_modal" then
-                    if state == "calibration_wait" then
-                        local ok, msg = me.calibrate()
-                        if ok then
-                            me_ok, me_msg = me.init()
-                            state = "shop"
-                            showMsg("УСПЕХ", msg, false)
-                        else
-                            state = "calibration_wait"
-                            showMsg("ОШИБКА", msg, true)
-                        end
-                    elseif state == "admin_wait_scan" then
+                    if state == "admin_wait_scan" then
                         local stack, slot = me.peekInput()
                         if not stack then
                             state = (ed_data.target == "item") and "admin_item" or "admin_buy"
@@ -227,12 +227,19 @@ while true do
                 elseif state == "shop" then
                     if action == "login" then
                         local is_adm = false; if config.admins and config.admins[player_name] then is_adm = true end
-                        local succ, res = network.get("/users/" .. player_name)
+                        
+                        -- ПОДТЯГИВАЕМ БАЛАНС
                         local bal = 0
-                        if succ and res and res ~= "null" then
-                            local udata = json.decode(res)
-                            if udata and udata.balance then bal = udata.balance end
+                        if users_db[player_name] then
+                            bal = users_db[player_name].balance
+                        else
+                            local succ, res = network.get("/users/" .. player_name)
+                            if succ and res and res ~= "null" then
+                                local udata = json.decode(res)
+                                if udata and udata.balance then bal = udata.balance end
+                            end
                         end
+                        
                         currentUser = { name = player_name, balance = bal, isAdmin = is_adm }; idleTimer = 30; refreshScreen()
                     
                     elseif action == "logout" then currentUser = nil; cart = {}; refreshScreen()
