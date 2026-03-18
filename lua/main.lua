@@ -11,7 +11,7 @@ local me = require("me_logic")
 local network = require("network")
 local json = require("json")
 
-os.execute("set +c")
+-- УДАЛИЛ БАГОВАННУЮ СТРОЧКУ os.execute("set +c")
 local me_ok, me_msg = me.init()
 
 local OWNER_NAME = "Администратор"
@@ -20,7 +20,7 @@ if config.admins then for k, v in pairs(config.admins) do OWNER_NAME = k; break 
 local shop_items = {}
 local shop_buyback = {}
 local categories = {"ВСЕ", "Ресурсы", "Механизмы", "Броня"}
-local users_db = {} -- ЛОКАЛЬНАЯ БАЗА ИГРОКОВ
+local users_db = {} 
 
 local active_category = "ВСЕ"
 local currentUser = nil
@@ -54,30 +54,57 @@ local function saveUser()
     if not users_db[currentUser.name] then users_db[currentUser.name] = {} end
     users_db[currentUser.name].balance = currentUser.balance
     
-    -- Сохраняем локально (железобетонно)
     local f = io.open("/home/users.json", "w")
     if f then f:write(json.encode(users_db)); f:close() end
-    
-    -- Синхронизируем с облаком (если работает)
     pcall(function() network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end)
+end
+
+-- ЛОКАЛЬНОЕ СОХРАНЕНИЕ МАГАЗИНА
+local function loadShopLocal()
+    local f = io.open("/home/shop_data.json", "r")
+    if f then
+        local data = f:read("*a")
+        f:close()
+        if data and data ~= "" then
+            local parsed = json.decode(data)
+            if parsed then
+                if parsed.categories then categories = parsed.categories end
+                if parsed.items then shop_items = parsed.items end
+                if parsed.buyback then shop_buyback = parsed.buyback end
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function saveShop()
     local data = { categories = categories, items = shop_items, buyback = shop_buyback }
-    pcall(function() network.put("/shop", json.encode(data)) end)
+    local encoded = json.encode(data)
+    
+    -- Сохраняем на жесткий диск компа
+    local f = io.open("/home/shop_data.json", "w")
+    if f then f:write(encoded); f:close() end
+    
+    -- Синхронизируем с Firebase
+    pcall(function() network.put("/shop", encoded) end)
 end
 
 local function loadDB()
-    loadUsers() -- Грузим локальные балансы
-    local succ, res = network.get("/shop")
-    if succ and res and res ~= "null" then
-        local parsed = json.decode(res)
-        if parsed then
-            if parsed.categories then categories = parsed.categories end
-            if parsed.items then shop_items = parsed.items end
-            if parsed.buyback then shop_buyback = parsed.buyback end
-        end
-    else saveShop() end
+    loadUsers()
+    if not loadShopLocal() then
+        -- Если локального файла нет, пытаемся скачать из сети
+        local succ, res = network.get("/shop")
+        if succ and res and res ~= "null" then
+            local parsed = json.decode(res)
+            if parsed then
+                if parsed.categories then categories = parsed.categories end
+                if parsed.items then shop_items = parsed.items end
+                if parsed.buyback then shop_buyback = parsed.buyback end
+                saveShop() -- Создаем локальную копию
+            end
+        else saveShop() end
+    end
 end
 
 local function getFreeDBSlot()
@@ -228,7 +255,6 @@ while true do
                     if action == "login" then
                         local is_adm = false; if config.admins and config.admins[player_name] then is_adm = true end
                         
-                        -- ПОДТЯГИВАЕМ БАЛАНС
                         local bal = 0
                         if users_db[player_name] then
                             bal = users_db[player_name].balance
@@ -252,7 +278,7 @@ while true do
                             local success, msg, earned = me.sellAll(shop_buyback)
                             if success then 
                                 currentUser.balance = currentUser.balance + earned; saveUser()
-                                writeLog("ПРОДАЖА ИГРОКОМ", currentUser.name, msg .. " Начислено: " .. earned .. " ЭМ")
+                                writeLog("ПРОДАЖА", currentUser.name, msg .. " Начислено: " .. earned .. " ЭМ")
                                 showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false)
                             else showMsg("ОШИБКА", msg, true) end
                         end
