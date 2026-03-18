@@ -28,7 +28,6 @@ local selectedItem = nil
 local selectedQty = 1
 local isCartMode = false
 local cart = {}
-
 local ed_data = {}
 
 local function saveShop()
@@ -99,7 +98,6 @@ loadDB()
 refreshScreen()
 
 while true do
-    -- Получаем "сырые" аргументы, чтобы разобрать их правильно
     local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
     
     if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
@@ -110,33 +108,28 @@ while true do
         else idleTimer = 30 end
     end
 
-    -- === ОБРАБОТКА ВВОДА С КЛАВИАТУРЫ ===
     if ev == "key_down" and state == "editor" then
         local char = arg1
         local code = arg2
         local val = (ed_data.focus == "name") and ed_data.name or tostring(ed_data.price)
         
-        if code == 14 then -- Нажат Backspace
+        if code == 14 then
             if unicode.len(val) > 0 then val = unicode.sub(val, 1, -2) end
-        elseif char >= 32 then -- Нажата обычная буква или цифра
+        elseif char >= 32 then
             val = val .. unicode.char(char)
         end
         
         if ed_data.focus == "name" then ed_data.name = val else ed_data.price = val end
         refreshScreen()
         
-    -- === ОБРАБОТКА ВСТАВКИ ТЕКСТА (БУФЕР ОБМЕНА) ===
     elseif ev == "clipboard" and state == "editor" then
         local text = arg1
         if ed_data.focus == "name" then ed_data.name = ed_data.name .. text
         else ed_data.price = tostring(ed_data.price) .. text end
         refreshScreen()
 
-    -- === ОБРАБОТКА КЛИКОВ ПО ЭКРАНУ ===
     elseif ev == "touch" then
-        local x = arg1
-        local y = arg2
-        local player_name = arg4
+        local x = arg1; local y = arg2; local player_name = arg4
 
         if currentUser and currentUser.name ~= player_name then computer.beep(400, 0.1)
         else
@@ -157,6 +150,7 @@ while true do
                             ed_data.isItem = (ed_data.target == "item")
                             ed_data.orig_name = stack.label
                             ed_data.orig_id = stack.name
+                            ed_data.damage = stack.damage or 0
                             ed_data.name = stack.label
                             ed_data.price = ""
                             ed_data.cat = categories[2] or "ВСЕ"
@@ -178,7 +172,6 @@ while true do
                         state = (ed_data.target == "item") and "admin_item" or "admin_buy"
                         refreshScreen()
                     elseif action == "ed_save" then
-                        -- Поддержка и точки, и запятой в ценах (1,5 = 1.5)
                         local p_str = tostring(ed_data.price):gsub(",", ".")
                         if p_str == "" or not tonumber(p_str) then
                             showMsg("ОШИБКА", "Введите корректную цену (число)!", true)
@@ -189,14 +182,14 @@ while true do
                                     me.storeToDB(ed_data.slot, db_s)
                                     table.insert(shop_items, { 
                                         name = ed_data.name, price = tonumber(p_str), category = ed_data.cat, 
-                                        stock = 0, id = ed_data.orig_id, orig_label = ed_data.orig_name, db_slot = db_s 
+                                        stock = 0, id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name, db_slot = db_s 
                                     })
                                 else
                                     showMsg("ОШИБКА", "База данных заполнена!", true); return
                                 end
                             else
                                 table.insert(shop_buyback, { 
-                                    name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, orig_label = ed_data.orig_name 
+                                    name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name 
                                 })
                             end
                             saveShop()
@@ -257,7 +250,8 @@ while true do
                         if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
                         elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало ЭМ!", true)
                         else
-                            local ok, msg = me.buyItem(selectedItem.db_slot, selectedQty)
+                            -- ИСПРАВЛЕННЫЙ ВЫЗОВ (Передаем весь item)
+                            local ok, msg = me.buyItem(selectedItem, selectedQty)
                             if ok then
                                 currentUser.balance = currentUser.balance - cost
                                 saveUser(); saveShop()
@@ -282,7 +276,8 @@ while true do
                             else
                                 local all_ok = true
                                 for _, ci in ipairs(cart) do
-                                    local ok, msg = me.buyItem(ci.item.db_slot, ci.qty)
+                                    -- ИСПРАВЛЕННЫЙ ВЫЗОВ
+                                    local ok, msg = me.buyItem(ci.item, ci.qty)
                                     if not ok then all_ok = false end
                                 end
                                 
