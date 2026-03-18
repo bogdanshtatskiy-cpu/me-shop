@@ -10,7 +10,8 @@ gui.buttons = {}
 gui.COLORS = {
     bg = 0x111111, tileBg = 0x222222, tileHeader = 0x333333,
     text = 0xEEEEEE, label = 0x999999, good = 0x55FF55, warn = 0xFFAA00, bad = 0xFF5555,
-    energy = 0x00AAFF, btn = 0x444444, btnActive = 0x006699, panel = 0x181818
+    energy = 0x00AAFF, btn = 0x444444, btnActive = 0x006699, panel = 0x181818,
+    modalGood = 0x004400, modalBad = 0x660000, inputBg = 0x000000, inputFocus = 0x333333
 }
 
 local W, H = gpu.getResolution()
@@ -33,7 +34,7 @@ end
 function gui.drawStatic(user, timer, cart_count)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, rightColX - 1, 3, gui.COLORS.panel)
-    text(3, 2, "МЭ МАГАЗИН v3.5", gui.COLORS.energy, gui.COLORS.panel)
+    center(1, 2, rightColX - 1, "МЭ МАГАЗИН v4.0", gui.COLORS.energy, gui.COLORS.panel)
 
     rect(rightColX, 1, rightColW, H, gui.COLORS.panel)
     local userBoxY = 1
@@ -76,7 +77,6 @@ function gui.drawItems(items)
         center(x, y, tileW, item.name, gui.COLORS.text, gui.COLORS.tileHeader)
         text(x + 2, y + 2, "Цена: " .. item.price .. " ЭМ", gui.COLORS.warn, gui.COLORS.tileBg)
         
-        -- Цвет запаса в зависимости от наличия
         local stockCol = (item.stock and item.stock > 0) and gui.COLORS.label or gui.COLORS.bad
         text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0) .. " шт", stockCol, gui.COLORS.tileBg)
         
@@ -97,12 +97,12 @@ function gui.drawBuybackItems(buyback_items, isUserLogged)
 end
 
 function gui.drawNotification(title, message, isError)
-    gui.buttons = {}; local w = 50; local h = 10; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
-    local titleCol = isError and gui.COLORS.bad or gui.COLORS.good
+    gui.buttons = {}; local w = 60; local h = 10; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
+    local titleCol = isError and gui.COLORS.modalBad or gui.COLORS.modalGood
     rect(x, y, w, h, gui.COLORS.tileBg); rect(x, y, w, 2, titleCol)
-    center(x, y, w, title, gui.COLORS.bg, titleCol)
+    center(x, y, w, title, gui.COLORS.text, titleCol)
     center(x, y + 4, w, message, gui.COLORS.text, gui.COLORS.tileBg)
-    gui.btn("close_modal", x + 15, y + 7, 20, 1, "ОК", gui.COLORS.btn)
+    gui.btn("close_modal", x + 20, y + 7, 20, 1, "ОК", gui.COLORS.btn)
 end
 
 function gui.drawQuantitySelector(item, qty, isCartMode)
@@ -127,21 +127,18 @@ function gui.drawCart(cart_items)
     rect(x, y, w, h, gui.COLORS.panel); rect(x, y, w, 2, gui.COLORS.energy)
     center(x, y, w, "КОРЗИНА", gui.COLORS.text, gui.COLORS.energy)
     
-    local totalCost = 0
-    local curY = y + 3
+    local totalCost = 0; local curY = y + 3
     if #cart_items == 0 then
         center(x, y + 8, w, "Корзина пуста", gui.COLORS.label, gui.COLORS.panel)
     else
         for i, ci in ipairs(cart_items) do
-            local cost = ci.item.price * ci.qty
-            totalCost = totalCost + cost
+            local cost = ci.item.price * ci.qty; totalCost = totalCost + cost
             text(x + 2, curY, ci.item.name .. " x" .. ci.qty, gui.COLORS.text, gui.COLORS.panel)
             text(x + w - 15, curY, cost .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
             gui.btn("cart_del_"..i, x + w - 6, curY, 4, 1, "X", gui.COLORS.bad)
             curY = curY + 2
         end
     end
-    
     rect(x, y + h - 4, w, 1, gui.COLORS.tileHeader)
     text(x + 2, y + h - 2, "ИТОГО: " .. totalCost .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
     gui.btn("checkout", x + w - 20, y + h - 3, 18, 3, "ОПЛАТИТЬ", gui.COLORS.good)
@@ -151,14 +148,12 @@ end
 function gui.drawAdmin(substate, list)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, W, 3, gui.COLORS.panel); center(1, 2, W, "ПАНЕЛЬ УПРАВЛЕНИЯ МАГАЗИНОМ", gui.COLORS.energy, gui.COLORS.panel)
-    
     gui.btn("adm_cat", 5, 5, 20, 3, "КАТЕГОРИИ", substate == "cat" and gui.COLORS.btnActive or gui.COLORS.btn)
     gui.btn("adm_item", 28, 5, 20, 3, "ТОВАРЫ", substate == "item" and gui.COLORS.btnActive or gui.COLORS.btn)
     gui.btn("adm_buy", 51, 5, 20, 3, "СКУПКА", substate == "buy" and gui.COLORS.btnActive or gui.COLORS.btn)
     gui.btn("close_admin", W - 25, 5, 20, 3, "ВЫЙТИ В МАГАЗИН", gui.COLORS.bad)
 
     rect(5, 10, W - 10, H - 12, gui.COLORS.panel)
-    
     local y = 12
     if list then
         for i, el in ipairs(list) do
@@ -173,32 +168,44 @@ function gui.drawAdmin(substate, list)
     gui.btn("adm_add", 5, H - 3, W - 10, 3, "ДОБАВИТЬ НОВУЮ ЗАПИСЬ", gui.COLORS.good)
 end
 
--- КРАСИВОЕ ОКНО РЕДАКТОРА
-function gui.drawEditor(title, orig_name, isItem)
+-- ВСТРОЕННЫЙ РЕДАКТОР
+function gui.drawEditorModal(data, categories)
     gui.buttons = {}
-    local w = 50; local h = isItem and 17 or 14
+    local w = 60; local h = data.isItem and 18 or 14
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
+    
     rect(x, y, w, h, gui.COLORS.tileBg)
     rect(x, y, w, 2, gui.COLORS.energy)
-    center(x, y, w, title, gui.COLORS.text, gui.COLORS.energy)
-
-    text(x+2, y+3, "Оригинал: " .. orig_name, gui.COLORS.label, gui.COLORS.tileBg)
-
+    center(x, y, w, "РЕДАКТОР ПРЕДМЕТА", gui.COLORS.text, gui.COLORS.energy)
+    
+    text(x+2, y+3, "Оригинал: " .. (data.orig_name or "-"), gui.COLORS.label, gui.COLORS.tileBg)
+    
+    -- Поле Название
     text(x+2, y+5, "Название в магазине:", gui.COLORS.text, gui.COLORS.tileBg)
-    rect(x+2, y+6, w-4, 1, gui.COLORS.panel)
-
+    local bgName = (data.focus == "name") and gui.COLORS.inputFocus or gui.COLORS.inputBg
+    gui.btn("focus_name", x+2, y+6, w-4, 1, data.name .. ((data.focus == "name") and "_" or ""), bgName, gui.COLORS.text)
+    
+    -- Поле Цена
     text(x+2, y+8, "Цена (число):", gui.COLORS.text, gui.COLORS.tileBg)
-    rect(x+2, y+9, w-4, 1, gui.COLORS.panel)
-
-    if isItem then
+    local bgPrice = (data.focus == "price") and gui.COLORS.inputFocus or gui.COLORS.inputBg
+    gui.btn("focus_price", x+2, y+9, w-4, 1, data.price .. ((data.focus == "price") and "_" or ""), bgPrice, gui.COLORS.text)
+    
+    -- Кнопки категорий
+    if data.isItem then
         text(x+2, y+11, "Категория:", gui.COLORS.text, gui.COLORS.tileBg)
-        rect(x+2, y+12, w-4, 1, gui.COLORS.panel)
+        local cx = x+2
+        for _, cat in ipairs(categories) do
+            if cat ~= "ВСЕ" then
+                local cw = unicode.len(cat) + 2
+                local cBg = (data.cat == cat) and gui.COLORS.btnActive or gui.COLORS.btn
+                gui.btn("setcat_"..cat, cx, y+12, cw, 1, cat, cBg)
+                cx = cx + cw + 1
+            end
+        end
     end
     
-    center(x, y+h-2, w, "[ Печатайте на клавиатуре. Enter = След. поле ]", gui.COLORS.warn, gui.COLORS.tileBg)
-    
-    -- Возвращаем координаты полей ввода для main.lua
-    return x+2, y+6, x+2, y+9, x+2, y+12, w-4
+    gui.btn("ed_save", x + 5, y + h - 2, 20, 1, "СОХРАНИТЬ", gui.COLORS.good)
+    gui.btn("ed_cancel", x + 35, y + h - 2, 20, 1, "ОТМЕНА", gui.COLORS.bad)
 end
 
 function gui.checkClick(x, y)
