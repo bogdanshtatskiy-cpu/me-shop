@@ -1,5 +1,4 @@
 -- /lua/main.lua
-local component = require("component") -- ВОТ ЭТА СТРОЧКА БЫЛА ПРОПУЩЕНА!
 local event = require("event")
 local os = require("os")
 local io = require("io")
@@ -10,6 +9,7 @@ local config = require("config")
 local me = require("me_logic")
 local network = require("network")
 local json = require("json")
+local component = require("component") 
 
 os.execute("set +c")
 local me_ok, me_msg = me.init()
@@ -59,10 +59,14 @@ local function loadDB()
     end
 end
 
--- === УТИЛИТЫ ===
+-- === УТИЛИТЫ (БРОНЕБОЙНЫЙ ВВОД ТЕКСТА) ===
 local function askText(prompt_text)
-    component.gpu.setBackground(0x000000)
-    term.clear()
+    -- Жестко вызываем компоненты внутри функции, чтобы OC их не "потерял"
+    local comp = require("component")
+    local trm = require("term")
+    
+    comp.gpu.setBackground(0x000000)
+    trm.clear()
     print("=== РЕДАКТИРОВАНИЕ ===")
     print(prompt_text)
     io.write("> ")
@@ -131,6 +135,7 @@ while true do
                             state = (admin_add_target == "item") and "admin_item" or "admin_buy"
                             showMsg("ОШИБКА СКАНЕРА", err, true)
                         else
+                            -- ВЫЗЫВАЕМ НАШ ИСПРАВЛЕННЫЙ ASKTEXT
                             local n = askText("Предмет: " .. stack.label .. "\nВведите красивое название для магазина:")
                             local p = askText("Введите цену (число):")
                             if n == "" then n = stack.label end
@@ -268,12 +273,12 @@ while true do
                             local n = askText("Новое название категории:")
                             if n and n ~= "" then categories[idx] = n end
                         elseif state == "admin_item" then
-                            local n = askText("Новое имя товара (Enter - оставить " .. shop_items[idx].name .. "):")
+                            local n = askText("Новое имя (Enter - оставить " .. shop_items[idx].name .. "):")
                             local p = askText("Новая цена (число):")
                             if n and n ~= "" then shop_items[idx].name = n end
                             if p and tonumber(p) then shop_items[idx].price = tonumber(p) end
                         elseif state == "admin_buy" then
-                            local n = askText("Новое имя ресурса (Enter - оставить " .. shop_buyback[idx].name .. "):")
+                            local n = askText("Новое имя (Enter - оставить " .. shop_buyback[idx].name .. "):")
                             local p = askText("Новая цена скупки:")
                             if n and n ~= "" then shop_buyback[idx].name = n end
                             if p and tonumber(p) then shop_buyback[idx].price = tonumber(p) end
