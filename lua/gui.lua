@@ -33,7 +33,6 @@ function gui.btn(id, x, y, w, h, str, bg, fg)
     gui.buttons[id] = {x=x, y=y, w=w, h=h} 
 end
 
--- === ОСНОВНОЙ ИНТЕРФЕЙС ===
 function gui.drawStatic(user, timer)
     gpu.setBackground(gui.COLORS.bg)
     term.clear()
@@ -50,7 +49,6 @@ function gui.drawStatic(user, timer)
         center(rightColX, userBoxY + 5, rightColW, user.name, gui.COLORS.good, gui.COLORS.panel)
         center(rightColX, userBoxY + 6, rightColW, user.balance .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
         
-        -- Таймер автовыхода
         if timer then
             center(rightColX, userBoxY + 8, rightColW, "Выход через: " .. timer .. "с", gui.COLORS.label, gui.COLORS.panel)
         end
@@ -101,20 +99,16 @@ function gui.drawBuybackItems(buyback_items)
         text(x, y, "- " .. item.name .. " (" .. item.price .. " ЭМ)", gui.COLORS.warn, gui.COLORS.panel)
         y = y + 1
     end
-    -- ЕДИНАЯ КНОПКА СКУПКИ ВНИЗУ
     gui.btn("sell_all", x, H - 3, w, 3, "ПРОДАТЬ ВСЁ", gui.COLORS.good)
 end
 
--- === ВСПЛЫВАЮЩИЕ ОКНА (МОДАЛКИ) ===
 function gui.drawNotification(title, message, isError)
-    gui.buttons = {} -- Блокируем остальные кнопки
+    gui.buttons = {}
     local w = 50; local h = 10; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     local titleCol = isError and gui.COLORS.bad or gui.COLORS.good
     rect(x, y, w, h, gui.COLORS.tileBg)
     rect(x, y, w, 2, titleCol)
     center(x, y, w, title, gui.COLORS.bg, titleCol)
-    
-    -- Простая разбивка текста (если длинный)
     center(x, y + 4, w, message, gui.COLORS.text, gui.COLORS.tileBg)
     gui.btn("close_modal", x + 15, y + 7, 20, 1, "ОК", gui.COLORS.btn)
 end
@@ -125,16 +119,13 @@ function gui.drawQuantitySelector(item, qty)
     rect(x, y, w, h, gui.COLORS.tileBg)
     rect(x, y, w, 2, gui.COLORS.tileHeader)
     center(x, y, w, "ПОКУПКА: " .. item.name, gui.COLORS.text, gui.COLORS.tileHeader)
-    
     center(x, y + 3, w, "В наличии: " .. item.stock .. " шт", gui.COLORS.label, gui.COLORS.tileBg)
     center(x, y + 5, w, "Количество: " .. qty, gui.COLORS.text, gui.COLORS.tileBg)
     center(x, y + 7, w, "К оплате: " .. (item.price * qty) .. " ЭМ", gui.COLORS.warn, gui.COLORS.tileBg)
-    
     gui.btn("qty_sub10", x + 2, y + 5, 5, 1, "-10", gui.COLORS.bad)
     gui.btn("qty_sub1", x + 8, y + 5, 5, 1, "-1", gui.COLORS.bad)
     gui.btn("qty_add1", x + 27, y + 5, 5, 1, "+1", gui.COLORS.good)
     gui.btn("qty_add10", x + 33, y + 5, 5, 1, "+10", gui.COLORS.good)
-    
     gui.btn("confirm_buy", x + 2, y + 10, 16, 1, "ПОДТВЕРДИТЬ", gui.COLORS.good)
     gui.btn("close_modal", x + 22, y + 10, 16, 1, "ОТМЕНА", gui.COLORS.bad)
 end
