@@ -4,12 +4,14 @@ local config = require("config")
 
 local net = {}
 
-net.FIREBASE_URL = "https://me-shop-71468-default-rtdb.europe-west1.firebasedatabase.app"
-
 function net.request(method, path, data)
-    local url = net.FIREBASE_URL .. path .. ".json"
+    -- Защита: если ссылка не указана, отменяем запрос
+    if not config.firebase_url or config.firebase_url == "" then
+        return false, "URL базы данных не настроен в config.lua"
+    end
+
+    local url = config.firebase_url .. path .. ".json"
     
-    -- Подставляем секретный ключ только если он есть в конфиге
     if config.db_secret and config.db_secret ~= "" then
         url = url .. "?auth=" .. config.db_secret
     end
