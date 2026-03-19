@@ -4,18 +4,12 @@ local sides = require("sides")
 
 local me = {}
 me.t = nil      
-me.db = nil     
 
-me.config = { 
-    chest_side = sides.up,    
-    me_side = sides.down      
-}
+me.config = { chest_side = sides.up, me_side = sides.down }
 
 function me.init()
     if component.isAvailable("transposer") then me.t = component.transposer end
-    if component.isAvailable("database") then me.db = component.database end
-
-    if not me.t then return false, "Транспоузер не найден!" end
+    if not me.t then return false, "Транспоузер скупки не найден!" end
     if not component.isAvailable("me_interface") then return false, "МЭ Интерфейс не найден!" end
     return true, "МЭ компоненты готовы."
 end
@@ -91,46 +85,26 @@ function me.peekInput()
 end
 
 function me.storeToDB(chest_slot, db_slot)
-    if not me.t or not me.db then return false end
-    return me.t.store(me.config.chest_side, chest_slot, me.db.address, db_slot)
+    return true -- Оставил заглушку, чтобы main.lua не ругался при добавлении товара. БД нам больше не нужна.
 end
 
+-- === ИДЕАЛЬНАЯ И ПРОСТАЯ ВЫДАЧА (ПРОБИВАЕМ БАГ МОДА) ===
 function me.buyItem(item, qty)
-    if not me.db then return false, "БД не подключена!" end
-    if not item.db_slot then return false, "Товар не привязан к БД!" end
+    -- ВОТ ОНО! Формируем слепок именно с "dmg", как того требует кривой AE2
+    local perfect_fingerprint = {
+        id = item.id,
+        dmg = math.floor(item.damage or 0)
+    }
     
-    local db_data = me.db.get(item.db_slot)
-    if type(db_data) ~= "table" or not db_data.name then return false, "Слот БД пуст!" end
-    
-    -- БЕРЕМ ОРИГИНАЛЬНЫЙ СЛЕПОК СО ВСЕМИ СКРЫТЫМИ ТЕГАМИ ПРЯМО ИЗ МЭ СЕТИ
-    local exact_fp = nil
-    for addr in component.list("me_interface") do
-        local ok, net_items = pcall(component.proxy(addr).getItemsInNetwork)
-        if ok and net_items then
-            for _, n_item in ipairs(net_items) do
-                if n_item.name == db_data.name and math.floor(n_item.damage or 0) == math.floor(db_data.damage or 0) then
-                    exact_fp = n_item
-                    break
-                end
-            end
-        end
-        if exact_fp then break end
-    end
-
-    if not exact_fp then return false, "Товара нет в МЭ сети!" end
-    
-    -- Подменяем name на id, чтобы AE2 не выдал ошибку Missing id
-    exact_fp.id = exact_fp.name
-
     local success = false
-    local last_err = "Сундук не найден ни с одной стороны"
+    local last_err = "Сундук выдачи не найден ни над одним интерфейсом!"
 
-    -- Пробиваем выдачу во все стороны
+    -- Опрашиваем все интерфейсы, пока один из них не выплюнет доски в сундук
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
         for side = 0, 5 do
             local ok, result, reason = pcall(function()
-                return me_proxy.exportItem(exact_fp, side, qty)
+                return me_proxy.exportItem(perfect_fingerprint, side, qty)
             end)
             
             if ok and (result == true or (type(result) == "table" and result.size and result.size > 0) or (type(result) == "number" and result > 0)) then
