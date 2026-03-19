@@ -34,7 +34,7 @@ end
 function gui.drawStatic(user, timer, cart_count)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, rightColX - 1, 3, gui.COLORS.panel)
-    center(1, 2, rightColX - 1, "МЭ МАГАЗИН v4.2", gui.COLORS.energy, gui.COLORS.panel)
+    center(1, 2, rightColX - 1, "МЭ МАГАЗИН v4.3", gui.COLORS.energy, gui.COLORS.panel)
 
     rect(rightColX, 1, rightColW, H, gui.COLORS.panel)
     local userBoxY = 1
@@ -50,8 +50,9 @@ function gui.drawStatic(user, timer, cart_count)
         rect(rightColX, 16, rightColW, 1, gui.COLORS.tileHeader)
         center(rightColX, 16, rightColW, "МЫ СКУПАЕМ:", gui.COLORS.text, gui.COLORS.tileHeader)
     else
-        gui.btn("login", rightColX + 2, userBoxY + 1, rightColW - 4, 5, "АВТОРИЗАЦИЯ", gui.COLORS.good)
-        center(rightColX, userBoxY + 7, rightColW, "Войдите для покупок", gui.COLORS.label, gui.COLORS.panel)
+        -- Сделали кнопку авторизации тоже 3 символа в высоту
+        gui.btn("login", rightColX + 2, userBoxY + 1, rightColW - 4, 3, "АВТОРИЗАЦИЯ", gui.COLORS.good)
+        center(rightColX, userBoxY + 5, rightColW, "Войдите для покупок", gui.COLORS.label, gui.COLORS.panel)
         rect(rightColX, 13, rightColW, 1, gui.COLORS.tileHeader)
         center(rightColX, 13, rightColW, "МЫ СКУПАЕМ:", gui.COLORS.text, gui.COLORS.tileHeader)
     end
@@ -67,26 +68,35 @@ function gui.drawCategories(categories, active_cat)
     end
 end
 
+-- === ИДЕАЛЬНАЯ СЕТКА ПО 4 ТОВАРА В РЯД ===
 function gui.drawItems(items)
     rect(1, 7, rightColX - 1, H - 6, gui.COLORS.bg)
-    local margin = 2; local cols = 3; local tileW = math.floor((rightColX - (cols + 1) * margin) / cols); local tileH = 6
+    local margin = 2
+    local cols = 4  -- 4 товара в ряд
+    local tileW = math.floor((rightColX - (cols + 1) * margin) / cols)
+    local tileH = 6
     local row, col = 0, 0
+    
     for i, item in ipairs(items) do
-        local x = margin + col * (tileW + margin); local y = 7 + row * (tileH + margin)
+        local x = margin + col * (tileW + margin)
+        local y = 7 + row * (tileH + margin)
+        
         rect(x, y, tileW, tileH, gui.COLORS.tileBg)
         center(x, y, tileW, item.name, gui.COLORS.text, gui.COLORS.tileHeader)
-        text(x + 2, y + 2, "Цена: " .. item.price .. " ЭМ", gui.COLORS.warn, gui.COLORS.tileBg)
+        text(x + 2, y + 2, item.price .. " ЭМ", gui.COLORS.warn, gui.COLORS.tileBg)
         
         local stockCol = (item.stock and item.stock > 0) and gui.COLORS.label or gui.COLORS.bad
-        text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0) .. " шт", stockCol, gui.COLORS.tileBg)
+        text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0), stockCol, gui.COLORS.tileBg)
         
-        gui.btn("buy_"..i, x + 1, y + 4, math.floor(tileW/2)-1, 1, "КУПИТЬ", gui.COLORS.good)
-        gui.btn("cart_"..i, x + math.floor(tileW/2) + 1, y + 4, math.floor(tileW/2)-1, 1, "+ КОРЗИНА", gui.COLORS.energy)
-        col = col + 1; if col >= cols then col = 0; row = row + 1 end
+        local halfW = math.floor(tileW/2)
+        gui.btn("buy_"..i, x, y + 5, halfW - 1, 1, "КУПИТЬ", gui.COLORS.good)
+        gui.btn("cart_"..i, x + halfW, y + 5, tileW - halfW, 1, "+ КОРЗИНА", gui.COLORS.energy)
+        
+        col = col + 1
+        if col >= cols then col = 0; row = row + 1 end
     end
 end
 
--- === НОВЫЕ ФУНКЦИИ ДЛЯ ОБНОВЛЕНИЯ БЕЗ МЕРЦАНИЯ ===
 function gui.drawTick(user, timer)
     if user and timer then
         center(rightColX, 9, rightColW, "Выход через: " .. timer .. "с   ", gui.COLORS.label, gui.COLORS.panel)
@@ -94,16 +104,15 @@ function gui.drawTick(user, timer)
 end
 
 function gui.drawStockTick(items)
-    local margin = 2; local cols = 3; local tileW = math.floor((rightColX - (cols + 1) * margin) / cols); local tileH = 6
+    local margin = 2; local cols = 4; local tileW = math.floor((rightColX - (cols + 1) * margin) / cols); local tileH = 6
     local row, col = 0, 0
     for i, item in ipairs(items) do
         local x = margin + col * (tileW + margin); local y = 7 + row * (tileH + margin)
         local stockCol = (item.stock and item.stock > 0) and gui.COLORS.label or gui.COLORS.bad
-        text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0) .. " шт      ", stockCol, gui.COLORS.tileBg)
+        text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0) .. "   ", stockCol, gui.COLORS.tileBg)
         col = col + 1; if col >= cols then col = 0; row = row + 1 end
     end
 end
--- =================================================
 
 function gui.drawBuybackItems(buyback_items, isUserLogged)
     local startY = isUserLogged and 18 or 15
