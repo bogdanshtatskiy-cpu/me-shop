@@ -33,11 +33,9 @@ local isCartMode = false
 local cart = {}
 local ed_data = {}
 
--- ПАГИНАЦИЯ МАГАЗИНА (5 строк по 4 товара = 20 шт)
 local currentPage = 1
 local ITEMS_PER_PAGE = 20
 
--- ПАГИНАЦИЯ АДМИНКИ (17 строк в списке)
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
@@ -119,6 +117,13 @@ local function loadDB()
             end
         else saveShop() end
     end
+end
+
+local function getFreeDBSlot()
+    local used = {}
+    for _, item in ipairs(shop_items) do if item.db_slot then used[item.db_slot] = true end end
+    for i = 1, 81 do if not used[i] then return i end end
+    return nil
 end
 
 local function getPageItems()
@@ -260,7 +265,6 @@ while true do
                         ed_data = {target = "shop_name", focus = "name", name = shop_name, isItem = false}
                         state = "editor"; refreshScreen()
                         
-                    -- ОБРАБОТКА НАЖАТИЯ "РЕДАКТИРОВАТЬ" В АДМИНКЕ
                     elseif action:match("adm_edit_") then
                         local origIdx = tonumber(action:match("%d+"))
                         if state == "admin_cat" then
@@ -311,7 +315,6 @@ while true do
                             else state = (ed_data.target == "item") and "admin_item" or "admin_buy" end
                             refreshScreen()
                             
-                        -- === СОХРАНЕНИЕ НОВЫХ И ОТРЕДАКТИРОВАННЫХ ДАННЫХ ===
                         elseif action == "ed_save" then
                             if ed_data.target == "shop_name" then
                                 shop_name = ed_data.name
@@ -320,7 +323,6 @@ while true do
                             elseif ed_data.target == "edit_cat" then
                                 local old_name = categories[ed_data.orig_idx]
                                 categories[ed_data.orig_idx] = ed_data.name
-                                -- Переносим все товары из старой категории в новую
                                 for _, it in ipairs(shop_items) do
                                     if it.category == old_name then it.category = ed_data.name end
                                 end
@@ -341,7 +343,6 @@ while true do
                                 saveShop(); state = "admin_buy"; refreshScreen()
                                 
                             else
-                                -- ДОБАВЛЕНИЕ НОВОГО ТОВАРА
                                 local p_str = tostring(ed_data.price):gsub(",", ".")
                                 if p_str == "" or not tonumber(p_str) then
                                     showMsg("ОШИБКА", "Введите корректную цену (число)!", true)
