@@ -4,7 +4,7 @@ local config = require("config")
 
 local net = {}
 
-net.FIREBASE_URL = "https://me-shop-db-f7542-default-rtdb.europe-west1.firebasedatabase.app"
+net.FIREBASE_URL = "https://me-shop-71468-default-rtdb.europe-west1.firebasedatabase.app"
 
 function net.request(method, path, data)
     local url = net.FIREBASE_URL .. path .. ".json"
