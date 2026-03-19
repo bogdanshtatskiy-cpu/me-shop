@@ -4,15 +4,16 @@ local internet = require("internet")
 local net = {}
 
 net.FIREBASE_URL = "https://me-shop-db-f7542-default-rtdb.europe-west1.firebasedatabase.app"
--- ВСТАВЬ СВОЙ СЕКРЕТНЫЙ КЛЮЧ ИЗ ШАГА 3
-net.SECRET = "ТВОЙ_ДЛИННЫЙ_СЕКРЕТНЫЙ_КЛЮЧ"
+net.SECRET = "ТВОЙ_СЕКРЕТНЫЙ_КЛЮЧ_ИЗ_НАСТРОЕК_FIREBASE"
 
 function net.request(method, path, data)
-    -- Теперь мы добавляем ?auth=СЕКРЕТ к каждому URL
     local url = net.FIREBASE_URL .. path .. ".json?auth=" .. net.SECRET
     local headers = {}
     if data then headers["Content-Type"] = "application/json" end
     
+    -- МАГИЯ ДЛЯ СТАРЫХ ВЕРСИЙ OC: ЗАСТАВЛЯЕМ FIREBASE ИГНОРИРОВАТЬ POST ОТ МОДА И ЧИТАТЬ НАШ МЕТОД
+    headers["X-HTTP-Method-Override"] = method
+
     local success, response = pcall(function()
         local handle = internet.request(url, data, headers, method)
         local result = ""
