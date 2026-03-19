@@ -83,7 +83,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Название</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Категория</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Цена</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Действие</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Действия</th>
                             </tr>
                         </thead>
                         <tbody id="shop-table" class="divide-y divide-gray-700"></tbody>
@@ -182,7 +182,7 @@
                                 <input type="number" id="bal-${name}" value="${balance}" class="bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 w-28 focus:outline-none focus:border-blue-500">
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <button onclick="saveBalance('${name}')" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded transition">СОХРАНИТЬ</button>
+                                <button onclick="saveBalance('${name}')" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded transition">Сохранить</button>
                             </td>
                         </tr>
                     `;
@@ -214,7 +214,10 @@
                                 <input type="number" id="price-${key}" value="${item.price}" class="bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 w-24 focus:outline-none focus:border-blue-500">
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <button onclick="saveItem('${key}')" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition">СОХРАНИТЬ</button>
+                                <div class="flex space-x-2">
+                                    <button onclick="saveItem('${key}')" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded transition">Сохранить</button>
+                                    <button onclick="deleteItem('${key}')" class="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-3 rounded transition">Удалить</button>
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -233,7 +236,7 @@
                     if (typeof log === 'string') { try { log = JSON.parse(log); } catch(e) { continue; } }
                     logsArray.push(log);
                 }
-                logsArray.reverse(); // Сортируем от новых к старым
+                logsArray.reverse(); 
                 
                 logsArray.forEach(log => {
                     let actionColor = "text-gray-300";
@@ -281,7 +284,33 @@
             });
         }
 
-        // Красивые уведомления вместо alert()
+        window.deleteItem = function(key) {
+            if (!confirm('Вы уверены, что хотите удалить этот товар? Эта операция необратима.')) return;
+
+            db.ref('shop').once('value').then((snapshot) => {
+                let shopData = snapshot.val() || {};
+                if (typeof shopData === 'string') {
+                    try { shopData = JSON.parse(shopData); } catch(e) { shopData = { items: [] }; }
+                }
+                
+                if (shopData.items) {
+                    // Преобразуем в массив, чтобы избежать "дыр" (null) в Firebase
+                    let itemsArray = Array.isArray(shopData.items) ? shopData.items : Object.values(shopData.items);
+                    
+                    // Удаляем элемент по индексу
+                    itemsArray.splice(Number(key), 1);
+                    
+                    // Очищаем от пустых элементов (на случай багов OC)
+                    shopData.items = itemsArray.filter(Boolean);
+                    
+                    db.ref('shop').set(shopData)
+                      .then(() => showToast('Товар успешно удален', 'success'))
+                      .catch(e => showToast('Ошибка удаления', 'error'));
+                }
+            });
+        }
+
+        // Красивые уведомления
         function showToast(message, type) {
             const toast = document.createElement('div');
             toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded shadow-lg text-white font-medium transition-opacity duration-300 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
