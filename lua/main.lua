@@ -24,6 +24,7 @@ local users_db = {}
 local active_category = "ВСЕ"
 local currentUser = nil
 local idleTimer = 0
+local msgTimer = 0  -- ТАЙМЕР АВТОЗАКРЫТИЯ ОКНА
 local state = "shop"
 local selectedItem = nil
 local selectedQty = 1
@@ -141,8 +142,10 @@ local function refreshScreen()
     end
 end
 
-local function showMsg(title, text, isError)
+-- === ОБНОВЛЕННАЯ ФУНКЦИЯ УВЕДОМЛЕНИЙ (С ТАЙМЕРОМ) ===
+local function showMsg(title, text, isError, timeout)
     state = "modal_msg"
+    msgTimer = timeout or 0 -- Если timeout задан, окно закроется само
     gui.drawNotification(title, text, isError)
 end
 
@@ -153,10 +156,18 @@ while true do
     local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
     
     if not ev then 
-        -- === ОБНОВЛЕНИЕ БЕЗ МЕРЦАНИЯ (РАЗ В СЕКУНДУ) ===
         local shouldRefreshFull = false
 
-        -- 1. Таймер выхода
+        -- === АВТОЗАКРЫТИЕ ОКНА УВЕДОМЛЕНИЙ ===
+        if state == "modal_msg" and msgTimer > 0 then
+            msgTimer = msgTimer - 1
+            if msgTimer <= 0 then
+                state = "shop"
+                shouldRefreshFull = true
+            end
+        end
+
+        -- Таймер выхода пользователя
         if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
             idleTimer = idleTimer - 1
             if idleTimer <= 0 then 
@@ -164,25 +175,23 @@ while true do
                 shouldRefreshFull = true
             else
                 if state == "shop" or state == "modal_qty" or state == "cart" then
-                    gui.drawTick(currentUser, idleTimer) -- Обновляем только текст таймера
+                    gui.drawTick(currentUser, idleTimer)
                 end
             end
         end
 
-        -- 2. Сток товаров (только если мы в магазине)
         if state == "shop" and not shouldRefreshFull then
             me.updateStock(shop_items)
             local filtered = {}
             for _, item in ipairs(shop_items) do
                 if active_category == "ВСЕ" or item.category == active_category then table.insert(filtered, item) end
             end
-            gui.drawStockTick(filtered) -- Обновляем только цифры в ячейках товаров
+            gui.drawStockTick(filtered)
         end
 
         if shouldRefreshFull then refreshScreen() end
     
     else
-        -- === ОБРАБОТКА КЛИКОВ ===
         if currentUser then idleTimer = 30 end
 
         if ev == "key_down" and state == "editor" then
@@ -231,7 +240,7 @@ while true do
                                 state = "editor"; refreshScreen()
                             end
                         else
-                            state = "shop"; refreshScreen()
+                            state = "shop"; msgTimer = 0; refreshScreen()
                         end
                     
                     elseif state == "editor" then
@@ -297,7 +306,8 @@ while true do
                                 if success then 
                                     currentUser.balance = currentUser.balance + earned; saveUser()
                                     writeLog("ПРОДАЖА", currentUser.name, msg .. " Начислено: " .. earned .. " ЭМ")
-                                    showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false)
+                                    -- ДОБАВЛЕН ТАЙМЕР НА 3 СЕКУНДЫ
+                                    showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false, 3)
                                 else showMsg("ОШИБКА", msg, true) end
                             end
                             
@@ -333,7 +343,8 @@ while true do
                                     currentUser.balance = currentUser.balance - cost
                                     saveUser(); saveShop()
                                     writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. selectedQty .. " за " .. cost .. " ЭМ")
-                                    showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false)
+                                    -- ДОБАВЛЕН ТАЙМЕР НА 3 СЕКУНДЫ
+                                    showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false, 3)
                                 else showMsg("ОШИБКА ВЫДАЧИ", msg, true) end
                             end
                         end
@@ -363,7 +374,7 @@ while true do
                                     saveUser(); saveShop()
                                     writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, "Оплачена корзина на сумму " .. totalCost .. " ЭМ")
                                     
-                                    if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false)
+                                    if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false, 3)
                                     else showMsg("ОШИБКА", "Оплата прошла, но некоторые предметы не выданы!", true) end
                                 end
                             end
