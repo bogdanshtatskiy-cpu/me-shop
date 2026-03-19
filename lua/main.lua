@@ -3,6 +3,7 @@ local component = require("component")
 local event = require("event")
 local os = require("os")
 local io = require("io")
+local fs = require("filesystem")
 local unicode = require("unicode")
 local gui = require("gui")
 local computer = require("computer")
@@ -41,7 +42,7 @@ local ITEMS_PER_PAGE = 20
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
--- === КАСТОМНЫЙ КАЛЕНДАРЬ (Игнорируем бешеный календарь Майнкрафта) ===
+-- === КАСТОМНЫЙ КАЛЕНДАРЬ ===
 local function formatUnixTime(unix)
     local z = math.floor(unix / 86400) + 719468
     local era = math.floor((z >= 0 and z or (z - 146096)) / 146097)
@@ -61,17 +62,28 @@ local function formatUnixTime(unix)
     return string.format("%04d-%02d-%02d %02d:%02d:%02d", y, m, d, h, min, s)
 end
 
--- === ВРЕМЯ НАПРЯМУЮ С ЖЕЛЕЗА ХОСТИНГА (ИДЕАЛЬНЫЙ ВАРИАНТ) ===
+-- === ТРЮК С ФАЙЛОМ ДЛЯ РЕАЛЬНОГО ВРЕМЕНИ ===
 local function getRealTime()
     local tz = tonumber(config.timezone) or 0
+    local tmp_file = "/home/HostTime.tmp"
     
-    if os.realtime then
-        -- os.realtime() берет системное время (UTC) физического сервера в секундах
-        local current_unix = math.floor(os.realtime())
-        return formatUnixTime(current_unix + (tz * 3600))
-    else
-        return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
+    local file = io.open(tmp_file, "w")
+    if file then
+        file:write("")
+        file:close()
+        
+        -- fs.lastModified возвращает время в миллисекундах. Делим на 1000, чтобы получить секунды.
+        local lastModifiedMs = fs.lastModified(tmp_file)
+        fs.remove(tmp_file)
+        
+        if lastModifiedMs and lastModifiedMs > 0 then
+            local current_unix = math.floor(lastModifiedMs / 1000)
+            -- Пропускаем через наш календарь, чтобы избежать багов os.date
+            return formatUnixTime(current_unix + (tz * 3600))
+        end
     end
+    
+    return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
 end
 
 local function writeLog(action, user, details)
