@@ -34,49 +34,43 @@ local selectedQty = 1
 local isCartMode = false
 local cart = {}
 local ed_data = {}
+local log_filter = ""
 
 local currentPage = 1
 local ITEMS_PER_PAGE = 20
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
--- === УМНОЕ ПОЛУЧЕНИЕ ВРЕМЕНИ С УЧЕТОМ ЧАСОВОГО ПОЯСА ===
-local function getRealTime()
-    if not config.use_database then return os.date("%Y-%m-%d %H:%M:%S") .. " (Локальное)" end
-    
-    -- Конвертируем понятный UTC+X в системный формат IANA (знаки инвертированы)
-    local tz = tonumber(config.timezone) or 0
-    local tz_str = "Etc/UTC"
-    if tz > 0 then tz_str = "Etc/GMT-" .. tostring(tz)
-    elseif tz < 0 then tz_str = "Etc/GMT+" .. tostring(math.abs(tz)) end
+-- === МАГИЯ РЕАЛЬНОГО ВРЕМЕНИ БЕЗ ЛАГОВ ===
+local time_offset = nil
 
+local function syncTime()
+    if not component.isAvailable("internet") then return end
     local ok, res = pcall(function()
-        local headers = { ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
-        local handle = require("internet").request("https://timeapi.io/api/Time/current/zone?timeZone=" .. tz_str, nil, headers)
+        -- Используем простой HTTP, чтобы избежать проблем с SSL в OC
+        local handle = require("internet").request("http://worldtimeapi.org/api/timezone/Etc/UTC")
         local data = ""
         for chunk in handle do data = data .. chunk end
         return data
     end)
     if ok and res and res ~= "" then
-        local p_ok, parsed = pcall(json.decode, res)
-        if p_ok and parsed and parsed.dateTime then
-            local d, t = string.match(parsed.dateTime, "(%d%d%d%d%-%d%d%-%d%d)T(%d%d:%d%d:%d%d)")
-            if d and t then return d .. " " .. t end
+        local unixtime = res:match('"unixtime":(%d+)')
+        if unixtime then
+            -- Запоминаем разницу между реальным миром и счетчиком компьютера
+            time_offset = tonumber(unixtime) - computer.uptime()
         end
     end
-    
-    local ok2, res2 = pcall(function()
-        local headers = { ["User-Agent"] = "Mozilla/5.0" }
-        local handle = require("internet").request("https://worldtimeapi.org/api/timezone/" .. tz_str .. ".txt", nil, headers)
-        local data = ""
-        for chunk in handle do data = data .. chunk end
-        return data
-    end)
-    if ok2 and res2 and res2 ~= "" then
-        local d, t = string.match(res2, "datetime: (%d%d%d%d%-%d%d%-%d%d)T(%d%d:%d%d:%d%d)")
-        if d and t then return d .. " " .. t end
+end
+
+local function getRealTime()
+    if time_offset then
+        local tz = tonumber(config.timezone) or 0
+        -- Вычисляем текущее точное время, даже если интернет пропал
+        local current_unix = computer.uptime() + time_offset + (tz * 3600)
+        return os.date("!%Y-%m-%d %H:%M:%S", current_unix)
+    else
+        return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
     end
-    return os.date("%Y-%m-%d %H:%M:%S") .. " (Игровое)"
 end
 
 local function writeLog(action, user, details)
@@ -86,11 +80,30 @@ local function writeLog(action, user, details)
     local f = io.open("/home/shop_logs.txt", "a")
     if f then f:write(log_line .. "\n"); f:close() end
     
-    if config.use_database then
+    if config.use_database and component.isAvailable("internet") then
         pcall(function() 
             network.request("POST", "/logs", json.encode({ time = time_str, action = action, user = user, details = details })) 
         end)
     end
+end
+
+local function loadLogsLocal(filter)
+    local logs = {}
+    local f = io.open("/home/shop_logs.txt", "r")
+    if f then
+        for line in f:lines() do 
+            if not filter or filter == "" or string.find(unicode.lower(line), unicode.lower(filter), 1, true) then
+                table.insert(logs, line)
+            end
+        end
+        f:close()
+    end
+    local res = {}
+    local count = #logs
+    local start = math.max(1, count - 150)
+    for i = count, start, -1 do table.insert(res, logs[i]) end
+    if #res == 0 then table.insert(res, "Логов пока нет или по фильтру ничего не найдено...") end
+    return res
 end
 
 local function loadUsersLocal()
@@ -127,7 +140,7 @@ local function saveUser()
     local f = io.open("/home/users.json", "w")
     if f then f:write(json.encode(users_db)); f:close() end
     
-    if config.use_database then
+    if config.use_database and component.isAvailable("internet") then
         pcall(function() network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end)
     end
 end
@@ -138,13 +151,13 @@ local function saveShop()
     local f = io.open("/home/shop_data.json", "w")
     if f then f:write(encoded); f:close() end
     
-    if config.use_database then
+    if config.use_database and component.isAvailable("internet") then
         pcall(function() network.put("/shop", encoded) end)
     end
 end
 
 local function loadDB()
-    if config.use_database then
+    if config.use_database and component.isAvailable("internet") then
         local succ_shop, res_shop = network.get("/shop")
         if succ_shop and res_shop and res_shop ~= "null" then
             local parsed = json.decode(res_shop)
@@ -191,13 +204,14 @@ local function getPageItems()
     return pageData, maxPage
 end
 
-local function getAdminPageItems(list)
-    local maxPage = math.ceil(#list / ADMIN_ITEMS_PER_PAGE)
+local function getAdminPageItems(list, limit)
+    limit = limit or ADMIN_ITEMS_PER_PAGE
+    local maxPage = math.ceil(#list / limit)
     if maxPage < 1 then maxPage = 1 end
     if adminPage > maxPage then adminPage = maxPage end
     local pageData = {}
-    local startIdx = (adminPage - 1) * ADMIN_ITEMS_PER_PAGE + 1
-    local endIdx = math.min(startIdx + ADMIN_ITEMS_PER_PAGE - 1, #list)
+    local startIdx = (adminPage - 1) * limit + 1
+    local endIdx = math.min(startIdx + limit - 1, #list)
     for i = startIdx, endIdx do table.insert(pageData, {item = list[i], origIdx = i}) end
     return pageData, maxPage
 end
@@ -221,9 +235,19 @@ local function refreshScreen()
         gui.drawCart(cart)
         
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
-        local listToPass = (state == "admin_cat") and categories or (state == "admin_item" and shop_items or shop_buyback)
-        local pItems, maxP = getAdminPageItems(listToPass)
-        gui.drawAdmin(state:gsub("admin_", ""), pItems, adminPage, maxP)
+        local listToPass = {}
+        local perPage = ADMIN_ITEMS_PER_PAGE
+        
+        if state == "admin_cat" then listToPass = categories
+        elseif state == "admin_item" then listToPass = shop_items
+        elseif state == "admin_buy" then listToPass = shop_buyback
+        elseif state == "admin_logs" then 
+            listToPass = loadLogsLocal(log_filter)
+            perPage = 34
+        end
+        
+        local pItems, maxP = getAdminPageItems(listToPass, perPage)
+        gui.drawAdmin(state:gsub("admin_", ""), pItems, adminPage, maxP, log_filter)
         
     elseif state == "editor" then
         gui.drawStatic(currentUser, idleTimer, #cart, getTop3Players(), shop_name)
@@ -237,11 +261,13 @@ local function showMsg(title, text, isError, timeout)
     gui.drawNotification(title, text, isError)
 end
 
+-- Инициализация
+syncTime()
 loadDB()
 refreshScreen()
 
 while true do
-    local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
+    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(1)
     
     if not ev then 
         local shouldRefreshFull = false
@@ -262,7 +288,7 @@ while true do
         end
 
         if state == "shop" and not shouldRefreshFull then
-            if config.use_database then
+            if config.use_database and component.isAvailable("internet") then
                 syncTimer = syncTimer - 1
                 if syncTimer <= 0 then
                     syncTimer = 15
@@ -309,6 +335,20 @@ while true do
             else ed_data.price = tostring(ed_data.price) .. text end
             refreshScreen()
 
+        elseif ev == "scroll" then
+            local dir = arg4
+            local player_name = arg5
+            if currentUser and currentUser.name ~= player_name then computer.beep(400, 0.1)
+            else
+                if state == "shop" then
+                    if dir > 0 and currentPage > 1 then currentPage = currentPage - 1; refreshScreen()
+                    elseif dir < 0 then currentPage = currentPage + 1; refreshScreen() end
+                elseif string.match(state, "admin") then
+                    if dir > 0 and adminPage > 1 then adminPage = adminPage - 1; refreshScreen()
+                    elseif dir < 0 then adminPage = adminPage + 1; refreshScreen() end
+                end
+            end
+
         elseif ev == "touch" then
             local x = arg1; local y = arg2; local player_name = arg4
 
@@ -324,6 +364,14 @@ while true do
                     elseif action == "adm_next" then adminPage = adminPage + 1; refreshScreen()
                     elseif action == "close_admin" then state = "shop"; refreshScreen()
                     elseif action == "open_cart" then state = "cart"; refreshScreen()
+                    
+                    -- Действия фильтра логов
+                    elseif action == "filter_logs" then
+                        ed_data = {target = "log_filter", focus = "name", name = log_filter, isItem = false}
+                        state = "editor"; refreshScreen()
+                    elseif action == "clear_filter" then
+                        log_filter = ""; adminPage = 1; refreshScreen()
+
                     elseif action == "adm_name" then
                         ed_data = {target = "shop_name", focus = "name", name = shop_name, isItem = false}
                         state = "editor"; refreshScreen()
@@ -371,10 +419,13 @@ while true do
                             if ed_data.target == "shop_name" or ed_data.target == "edit_cat" then state = "admin_cat"
                             elseif ed_data.target == "edit_item" then state = "admin_item"
                             elseif ed_data.target == "edit_buyback" then state = "admin_buy"
+                            elseif ed_data.target == "log_filter" then state = "admin_logs"
                             else state = (ed_data.target == "item") and "admin_item" or "admin_buy" end
                             refreshScreen()
                         elseif action == "ed_save" then
-                            if ed_data.target == "shop_name" then
+                            if ed_data.target == "log_filter" then
+                                log_filter = ed_data.name; state = "admin_logs"; adminPage = 1; refreshScreen()
+                            elseif ed_data.target == "shop_name" then
                                 shop_name = ed_data.name; saveShop(); state = "admin_cat"; refreshScreen()
                             elseif ed_data.target == "edit_cat" then
                                 local old_name = categories[ed_data.orig_idx]
@@ -416,7 +467,7 @@ while true do
                             local bal = 0
                             if users_db[player_name] then bal = users_db[player_name].balance
                             else
-                                if config.use_database then
+                                if config.use_database and component.isAvailable("internet") then
                                     local succ, res = network.get("/users/" .. player_name)
                                     if succ and res and res ~= "null" then
                                         local udata = json.decode(res)
@@ -516,6 +567,7 @@ while true do
                         if action == "adm_cat" then state = "admin_cat"; adminPage = 1; refreshScreen()
                         elseif action == "adm_item" then state = "admin_item"; adminPage = 1; refreshScreen()
                         elseif action == "adm_buy" then state = "admin_buy"; adminPage = 1; refreshScreen()
+                        elseif action == "adm_logs" then state = "admin_logs"; adminPage = 1; refreshScreen()
                         elseif action == "adm_name" then ed_data = {target = "shop_name", focus = "name", name = shop_name, isItem = false}; state = "editor"; refreshScreen()
                         elseif action == "adm_add" then
                             if state == "admin_cat" then
