@@ -5,21 +5,20 @@ local os = require("os")
 local io = require("io")
 local fs = require("filesystem")
 local unicode = require("unicode")
+local serialization = require("serialization")
 local gui = require("gui")
 local computer = require("computer")
 local config = require("config")
 local me = require("me_logic")
-local json = require("json")
 
 local me_ok, me_msg = me.init()
-
 local trades = {}
 local state = "main"
 local ed_data = {}
-
 local adminPage = 1
 local isAdminMode = false
 
+-- КАЛЕНДАРЬ
 local function formatUnixTime(unix)
     local z = math.floor(unix / 86400) + 719468
     local era = math.floor((z >= 0 and z or (z - 146096)) / 146097)
@@ -72,17 +71,24 @@ local function loadLogsLocal()
 end
 
 local function loadTrades()
-    local f = io.open("/home/trades.json", "r")
+    local f = io.open("/home/trades.cfg", "r")
     if f then
         local data = f:read("*a")
-        if data and data ~= "" then trades = json.decode(data) or {} end
+        if data and data ~= "" then trades = serialization.unserialize(data) or {} end
         f:close()
     end
 end
 
 local function saveTrades()
-    local f = io.open("/home/trades.json", "w")
-    if f then f:write(json.encode(trades)); f:close() end
+    local f = io.open("/home/trades.cfg", "w")
+    if f then f:write(serialization.serialize(trades)); f:close() end
+end
+
+local function getNextDbSlot()
+    local used = {}
+    for _, t in ipairs(trades) do used[t.db_slot] = true end
+    for i = 1, 81 do if not used[i] then return i end end
+    return 1
 end
 
 local function refreshScreen()
@@ -93,7 +99,7 @@ local function refreshScreen()
         if adminPage > maxPage then adminPage = maxPage end
         local pItems = {}
         for i = (adminPage - 1) * 17 + 1, math.min(adminPage * 17, #list) do
-            table.insert(pItems, {item = list[i], origIdx = i})
+            table.insert(pItems, {item = list[i], origIdx = (state == "admin_trades" and i or nil)})
         end
         gui.drawAdmin(state:gsub("admin_", ""), pItems, adminPage, maxPage)
     elseif state == "editor" then gui.drawEditorModal(ed_data)
@@ -105,54 +111,43 @@ local function processExchanges()
     for slot, item in pairs(inv) do
         for _, t in ipairs(trades) do
             if item.name == t.input.name and math.floor(item.damage or 0) == math.floor(t.input.damage or 0) then
-                -- Нашли совпадение! Считаем математику.
                 local max_out_from_me = math.floor(t.stock / t.ratio)
                 local free_space = me.getFreeSpace(t.output.name, t.output.damage)
                 local max_out_space = math.floor(free_space / t.ratio)
-                
-                -- Сколько руды мы РЕАЛЬНО можем обработать за 1 раз?
                 local can_process_input = math.min(item.size, max_out_from_me, max_out_space)
                 
                 if can_process_input > 0 then
                     local out_qty = can_process_input * t.ratio
-                    local ok, err = me.processExchange(slot, can_process_input, t.output, out_qty)
+                    local ok, err = me.processExchange(slot, can_process_input, t.db_slot, out_qty)
                     if ok then
                         t.stock = t.stock - out_qty
                         writeLog("ОБМЕН", string.format("%d %s -> %d %s", can_process_input, t.in_label, out_qty, t.out_label))
                         refreshScreen()
                     end
                 end
-                break -- Прерываем цикл трейдов для этого слота
+                break
             end
         end
     end
 end
 
--- Инициализация
 loadTrades()
 pcall(me.updateStock, trades)
 refreshScreen()
+if not me_ok then ed_data={title="ОШИБКА СИСТЕМЫ", msg=me_msg, err=true}; state="modal_msg"; refreshScreen() end
 
 local tickTimer = 0
 local stockTimer = 0
 
 while true do
-    local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
+    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(1)
     
     if not ev then 
-        -- ФОНОВАЯ РАБОТА КАЖДУЮ СЕКУНДУ
         if state == "main" and me_ok then
             tickTimer = tickTimer + 1
-            if tickTimer >= 2 then
-                tickTimer = 0
-                processExchanges()
-            end
+            if tickTimer >= 1 then tickTimer = 0; processExchanges() end
             stockTimer = stockTimer + 1
-            if stockTimer >= 60 then
-                stockTimer = 0
-                pcall(me.updateStock, trades)
-                refreshScreen()
-            end
+            if stockTimer >= 60 then stockTimer = 0; pcall(me.updateStock, trades); refreshScreen() end
         end
     else
         if ev == "touch" then
@@ -171,24 +166,19 @@ while true do
                 elseif action == "adm_logs" then state = "admin_logs"; adminPage = 1; refreshScreen()
                 
                 elseif action == "adm_add" then
-                    ed_data = {title="СКАНИРОВАНИЕ", msg="Положите 1 руду в левый и 1 слиток в правый сундук (в первые слоты)", err=false}
+                    ed_data = {title="СКАНИРОВАНИЕ", msg="Положите руду в ЛЕВЫЙ и слиток в ПРАВЫЙ сундук", err=false}
                     state = "admin_wait_scan"; refreshScreen()
                 
                 elseif action == "close_modal" then
                     if state == "admin_wait_scan" then
                         local in_st, out_st = me.getScanItems()
-                        if not in_st then
-                            ed_data = {title="ОШИБКА", msg="В левом сундуке (входе) пусто!", err=true}; state = "modal_msg"
-                        elseif not out_st then
-                            ed_data = {title="ОШИБКА", msg="В правом сундуке (выходе) пусто!", err=true}; state = "modal_msg"
+                        if not in_st then ed_data = {title="ОШИБКА", msg="Во входном сундуке пусто!", err=true}; state = "modal_msg"
+                        elseif not out_st then ed_data = {title="ОШИБКА", msg="В выходном сундуке пусто!", err=true}; state = "modal_msg"
                         else
                             ed_data = {
                                 input = {name = in_st.name, damage = in_st.damage},
                                 output = {name = out_st.name, damage = out_st.damage},
-                                in_label = in_st.label,
-                                out_label = out_st.label,
-                                ratio = "1",
-                                focus = "ratio"
+                                in_label = in_st.label, out_label = out_st.label, ratio = "1", focus = "ratio"
                             }
                             state = "editor"
                         end
@@ -202,10 +192,13 @@ while true do
                     elseif action == "ed_cancel" then state = "admin_trades"; refreshScreen()
                     elseif action == "ed_save" then
                         local r = tonumber(ed_data.ratio)
-                        if not r or r <= 0 then ed_data={title="ОШИБКА", msg="Укажите корректное число слитков!", err=true}; state="modal_msg"
+                        if not r or r <= 0 then ed_data={title="ОШИБКА", msg="Укажите корректное число!", err=true}; state="modal_msg"
                         else
-                            table.insert(trades, {input = ed_data.input, output = ed_data.output, in_label = ed_data.in_label, out_label = ed_data.out_label, ratio = r, stock = 0})
-                            saveTrades(); pcall(me.updateStock, trades); state = "admin_trades"
+                            local dbslot = getNextDbSlot()
+                            if me.storeToDB(dbslot) then
+                                table.insert(trades, {input=ed_data.input, output=ed_data.output, in_label=ed_data.in_label, out_label=ed_data.out_label, ratio=r, stock=0, db_slot=dbslot})
+                                saveTrades(); pcall(me.updateStock, trades); state = "admin_trades"
+                            else ed_data={title="ОШИБКА БД", msg="Не удалось сохранить слепок в Базу Данных!", err=true}; state="modal_msg" end
                         end
                         refreshScreen()
                     end
@@ -220,6 +213,12 @@ while true do
             if code == 14 then if unicode.len(val) > 0 then val = unicode.sub(val, 1, -2) end
             elseif char >= 32 then val = val .. unicode.char(char) end
             ed_data[ed_data.focus] = val; refreshScreen()
+        elseif ev == "scroll" then
+            local dir = arg4
+            if string.match(state, "admin") then
+                if dir > 0 and adminPage > 1 then adminPage = adminPage - 1; refreshScreen()
+                elseif dir < 0 then adminPage = adminPage + 1; refreshScreen() end
+            end
         end
     end
 end
