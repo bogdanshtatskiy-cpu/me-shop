@@ -119,14 +119,8 @@ local function refreshScreen()
         gui.drawItems(filtered)
         gui.drawBuybackItems(shop_buyback, currentUser ~= nil)
         
-        -- Вызов калибровки
         if not me_ok then 
-            if me_msg == "ТРЕБУЕТСЯ КАЛИБРОВКА" then
-                state = "calibration_wait"
-                gui.drawNotification("КАЛИБРОВКА", "Положите 1 предмет в сундук СКУПКИ (Левый) и нажмите ОК", false)
-            else
-                component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg)
-            end
+            component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg)
         end
         
     elseif state == "modal_qty" then
@@ -158,7 +152,7 @@ refreshScreen()
 while true do
     local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
     
-    if currentUser and state ~= "modal_msg" and state ~= "calibration_wait" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
+    if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
         if not ev then 
             idleTimer = idleTimer - 1
             if idleTimer <= 0 then currentUser = nil; cart = {}; state = "shop"; active_category = "ВСЕ" end
@@ -194,17 +188,7 @@ while true do
                 elseif action == "open_cart" then state = "cart"; refreshScreen()
                 
                 elseif action == "close_modal" then
-                    if state == "calibration_wait" then
-                        local ok, msg = me.calibrate()
-                        if ok then
-                            me_ok, me_msg = me.init()
-                            state = "shop"
-                            showMsg("УСПЕХ", msg, false)
-                        else
-                            state = "calibration_wait"
-                            showMsg("ОШИБКА", msg, true)
-                        end
-                    elseif state == "admin_wait_scan" then
+                    if state == "admin_wait_scan" then
                         local stack, slot = me.peekInput()
                         if not stack then
                             state = (ed_data.target == "item") and "admin_item" or "admin_buy"
