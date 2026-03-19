@@ -16,8 +16,8 @@
             <h2 class="text-3xl font-bold text-center text-blue-400 mb-6">Вход в систему</h2>
             <form id="login-form" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-400">Email</label>
-                    <input type="email" id="email" required class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-3 px-4 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <label class="block text-sm font-medium text-gray-400">Никнейм</label>
+                    <input type="text" id="email" required class="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-3 px-4 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-400">Пароль</label>
@@ -63,7 +63,7 @@
                 <div class="bg-gray-800 shadow rounded-lg overflow-hidden border border-gray-700">
                     <div class="hidden sm:flex bg-gray-700 p-4 text-xs font-medium text-gray-300 uppercase tracking-wider">
                         <div class="flex-1">Никнейм</div>
-                        <div class="w-48 text-center">Баланс (ЭМ)</div>
+                        <div class="w-48 text-center">Баланс</div>
                     </div>
                     <div id="users-list" class="divide-y divide-gray-700"></div>
                 </div>
@@ -110,7 +110,8 @@
             if (user) {
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
-                document.getElementById('user-email').innerText = user.email;
+                // Выводим ник без @shop.local
+                document.getElementById('user-email').innerText = user.email.replace('@shop.local', '');
                 loadData(); 
             } else {
                 document.getElementById('login-screen').classList.remove('hidden');
@@ -120,8 +121,12 @@
 
         document.getElementById('login-form').addEventListener('submit', (e) => {
             e.preventDefault();
-            const email = document.getElementById('email').value;
+            let email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
+            
+            if (!email.includes('@')) {
+                email = email + '@shop.local';
+            }
             
             auth.signInWithEmailAndPassword(email, password).catch(() => {
                 document.getElementById('login-error').classList.remove('hidden');
@@ -161,7 +166,7 @@
                             <div class="font-bold text-lg sm:text-base text-white">${name}</div>
                             <div class="flex items-center gap-3">
                                 <div class="flex-1 sm:flex-none">
-                                    <label class="text-xs text-gray-400 block sm:hidden mb-1">Баланс (ЭМ)</label>
+                                    <label class="text-xs text-gray-400 block sm:hidden mb-1">Баланс</label>
                                     <input type="number" id="bal-${name}" value="${balance}" class="w-full sm:w-28 bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
                                 </div>
                                 <div class="pt-5 sm:pt-0">
@@ -197,12 +202,12 @@
                                 <input type="text" id="cat-${key}" value="${item.category}" class="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
                             </div>
                             <div class="w-full md:w-24">
-                                <label class="text-xs text-gray-400 block md:hidden mb-1">Цена (ЭМ)</label>
+                                <label class="text-xs text-gray-400 block md:hidden mb-1">Цена</label>
                                 <input type="number" id="price-${key}" value="${item.price}" class="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-blue-500">
                             </div>
                             <div class="flex gap-2 w-full md:w-[180px] pt-2 md:pt-0 border-t border-gray-700 md:border-t-0 mt-2 md:mt-0">
-                                <button onclick="saveItem('${key}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded transition">Сохр</button>
-                                <button onclick="deleteItem('${key}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-3 rounded transition">Удал</button>
+                                <button onclick="saveItem('${key}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded transition">Сохранить</button>
+                                <button onclick="deleteItem('${key}')" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-3 rounded transition">Удалить</button>
                             </div>
                         </div>
                     `;
@@ -229,7 +234,6 @@
                     if(log.action.includes("ПРОДАЖА") || log.action.includes("СКУПКА")) actionColor = "text-yellow-400";
                     if(log.action.includes("УДАЛЕН") || log.action.includes("ОШИБКА")) actionColor = "text-red-400";
 
-                    // АДАПТИВНАЯ КАРТОЧКА ЛОГА (Как ты просил)
                     list.innerHTML += `
                         <div class="p-4 hover:bg-gray-750 transition flex flex-col gap-1">
                             <div class="flex flex-wrap justify-between items-center gap-x-4 gap-y-1 border-b border-gray-700 pb-2 sm:border-0 sm:pb-0">
@@ -303,7 +307,6 @@
             toast.innerText = message;
             document.body.appendChild(toast);
             
-            // Анимация появления
             requestAnimationFrame(() => {
                 toast.classList.remove('translate-y-10', 'opacity-0');
             });
