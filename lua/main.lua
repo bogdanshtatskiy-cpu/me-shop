@@ -254,7 +254,7 @@ local function refreshScreen()
         elseif state == "admin_buy" then listToPass = shop_buyback
         elseif state == "admin_logs" then 
             listToPass = loadLogsLocal(log_filter)
-            perPage = 15 -- Уменьшили, так как один лог может занимать 2-3 строки
+            perPage = 30 -- Изменили на 30 по твоей просьбе
         end
         
         local pItems, maxP = getAdminPageItems(listToPass, perPage)
