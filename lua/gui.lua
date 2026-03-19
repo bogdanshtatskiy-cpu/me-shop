@@ -124,18 +124,6 @@ function gui.drawTick(user, timer)
     if user and timer then center(rightColX, 9, rightColW, "Выход через: " .. timer .. "с   ", gui.COLORS.label, gui.COLORS.panel) end
 end
 
-function gui.drawStockTick(pageItems)
-    local margin = 2; local cols = 4; local tileW = math.floor((rightColX - (cols + 1) * margin) / cols); local tileH = 6
-    local row, col = 0, 0
-    for _, pItem in ipairs(pageItems) do
-        local item = pItem.item
-        local x = margin + col * (tileW + margin); local y = 7 + row * (tileH + 1)
-        local stockCol = (item.stock and item.stock > 0) and gui.COLORS.label or gui.COLORS.bad
-        text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0) .. "   ", stockCol, gui.COLORS.tileBg)
-        col = col + 1; if col >= cols then col = 0; row = row + 1 end
-    end
-end
-
 function gui.drawBuybackItems(buyback_items)
     local startY = gui.buybackY or 20
     local x = rightColX + 2; local w = rightColW - 4
