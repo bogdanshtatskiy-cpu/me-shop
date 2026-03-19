@@ -1,53 +1,49 @@
 -- /lua/installer.lua
-local component = require("component")
-local fs = require("filesystem")
+local internet = require("internet")
 
-if not component.isAvailable("internet") then
-    print("Ошибка: Для установки требуется интернет-карта!")
-    return
-end
+-- ССЫЛКА НА ТВОЙ РЕПОЗИТОРИЙ НА GITHUB
+local repo = "https://raw.githubusercontent.com/bogdanshtatskiy-cpu/me-shop/main/lua/"
 
-local internet = component.internet
-local repo_url = "https://raw.githubusercontent.com/bogdanshtatskiy-cpu/me-shop/main/lua/"
-
--- Список файлов для загрузки
 local files = {
-    "main.lua",
-    "gui.lua",
+    "config.lua",
     "network.lua",
     "me_logic.lua",
-    "config.lua",
-    "json.lua" -- Библиотека для работы с JSON (добавим позже)
+    "gui.lua",
+    "json.lua",
+    "main.lua"
 }
 
-print("=== Установка ME-Shop ===")
-fs.makeDirectory("/shop")
+print("=== УСТАНОВКА МЭ МАГАЗИНА ===")
+print("Подключение к GitHub...\n")
 
 for _, file in ipairs(files) do
-    io.write("Скачивание " .. file .. "... ")
-    local url = repo_url .. file
+    io.write("Скачивание " .. file .. " ... ")
+    local url = repo .. file
+    local success, response = pcall(internet.request, url)
     
-    local success, response = pcall(function()
-        local handle = internet.request(url)
-        local result = ""
-        while true do
-            local chunk = handle.read(math.huge)
-            if chunk then result = result .. chunk else break end
+    if success then
+        local content = ""
+        for chunk in response do content = content .. chunk end
+        
+        if content:match("404: Not Found") then
+            print("[ОШИБКА: Файл не найден]")
+        else
+            local f = io.open("/home/" .. file, "w")
+            if f then
+                f:write(content)
+                f:close()
+                print("[OK]")
+            else
+                print("[ОШИБКА записи файла]")
+            end
         end
-        handle.close()
-        return result
-    end)
-    
-    if success and response and #response > 0 then
-        local f = io.open("/shop/" .. file, "w")
-        f:write(response)
-        f:close()
-        print("[ОК]")
     else
-        print("[ОШИБКА]")
+        print("[ОШИБКА сети]")
     end
 end
 
-print("-------------------------")
-print("Установка завершена! Все файлы находятся в папке /shop")
-print("Не забудьте отредактировать /shop/config.lua перед запуском.")
+print("\n==============================")
+print("Установка успешно завершена!")
+print("Для первого запуска введите:")
+print("main")
+print("==============================")
