@@ -25,26 +25,4 @@
 
 ## 🚀 Установка
 
-Подробная инструкция по настройке базы данных Firebase, веб-панели и постройке структуры из сундуков находится в [полном руководстве (ССЫЛКА НА ТВОЙ ГАЙД/ФОРУМ)](#).
-
-**Быстрая установка клиента в Minecraft:**
-Вставьте пустой жесткий диск в компьютер (Tier 3) с интернет-картой и выполните команду:
-```bash
-wget -f https://raw.githubusercontent.com/ТВОЙ_НИК/me-shop/main/lua/installer.lua installer.lua
-Затем запустите установщик:
-installer
-После установки обязательно отредактируйте config.lua, добавив свой секретный ключ Firebase и никнейм администратора.
-
-🛠 Технологии
-Lua 5.2 (OpenComputers)
-
-HTML5 / Vanilla JS
-
-Tailwind CSS
-
-Firebase Realtime Database & Auth v8.10
-
-WorldTimeAPI / TimeAPI.io
-
-📄 Лицензия
-MIT
+Подробная инструкция по настройке базы данных Firebase, веб-панели и постройке структуры из сундуков находится в [полном руководстве ([ССЫЛКА НА ТВОЙ ГАЙД/ФОРУМ](https://htcbook.ru/books/open-computers/page/magazin-v-kompiutere-s-bd-i-upravleniem-s-telefona))](#).
