@@ -215,36 +215,63 @@ function gui.drawCart(cart_items)
     gui.btn("checkout", x + w - 20, y + h - 3, 18, 3, "ОПЛАТИТЬ", gui.COLORS.good)
 end
 
-function gui.drawAdmin(substate, pageItems, page, maxPage)
+function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, W, 3, gui.COLORS.panel); center(1, 2, W, "ПАНЕЛЬ УПРАВЛЕНИЯ МАГАЗИНОМ", gui.COLORS.energy, gui.COLORS.panel)
     
-    gui.btn("adm_cat", 5, 5, 18, 3, "КАТЕГОРИИ", substate == "cat" and gui.COLORS.btnActive or gui.COLORS.btn)
-    gui.btn("adm_item", 24, 5, 18, 3, "ТОВАРЫ", substate == "item" and gui.COLORS.btnActive or gui.COLORS.btn)
-    gui.btn("adm_buy", 43, 5, 18, 3, "СКУПКА", substate == "buy" and gui.COLORS.btnActive or gui.COLORS.btn)
-    gui.btn("adm_name", 62, 5, 20, 3, "ИМЯ МАГАЗИНА", gui.COLORS.btn)
-    gui.btn("close_admin", W - 22, 5, 18, 3, "ВЫЙТИ", gui.COLORS.bad)
+    gui.btn("adm_cat", 2, 5, 14, 3, "КАТЕГОРИИ", substate == "cat" and gui.COLORS.btnActive or gui.COLORS.btn)
+    gui.btn("adm_item", 17, 5, 14, 3, "ТОВАРЫ", substate == "item" and gui.COLORS.btnActive or gui.COLORS.btn)
+    gui.btn("adm_buy", 32, 5, 14, 3, "СКУПКА", substate == "buy" and gui.COLORS.btnActive or gui.COLORS.btn)
+    gui.btn("adm_name", 47, 5, 18, 3, "ИМЯ МАГАЗИНА", gui.COLORS.btn)
+    gui.btn("adm_logs", 66, 5, 14, 3, "ЛОГИ", substate == "logs" and gui.COLORS.btnActive or gui.COLORS.btn)
+    gui.btn("close_admin", W - 16, 5, 14, 3, "ВЫЙТИ", gui.COLORS.bad)
 
-    rect(5, 9, W - 10, H - 14, gui.COLORS.panel)
+    rect(2, 9, W - 4, H - 14, gui.COLORS.panel)
     local y = 10
+    
     if pageItems then
         for _, pItem in ipairs(pageItems) do
             local el = pItem.item
             local id = pItem.origIdx
             
-            local name = type(el) == "table" and el.name or el
-            local extra = type(el) == "table" and (" (" .. el.price .. " " .. CUR .. ")") or ""
-            if type(el) == "table" and el.category then extra = " ["..el.category.."]" .. extra end
+            if substate == "logs" then
+                local str = tostring(el)
+                local actionCol = gui.COLORS.text
+                if str:match("ПОКУПКА") then actionCol = gui.COLORS.good
+                elseif str:match("ПРОДАЖА") or str:match("СКУПКА") then actionCol = gui.COLORS.warn
+                elseif str:match("УДАЛЕН") or str:match("ОШИБКА") then actionCol = gui.COLORS.bad end
+                
+                local time_part, rest = str:match("(%[%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d%]) (.*)")
+                if time_part and rest then
+                    text(4, y, time_part, gui.COLORS.label, gui.COLORS.panel)
+                    text(4 + unicode.len(time_part) + 1, y, unicode.sub(rest, 1, W - 28), actionCol, gui.COLORS.panel)
+                else
+                    text(4, y, unicode.sub(str, 1, W - 8), actionCol, gui.COLORS.panel)
+                end
+                y = y + 1 
+            else
+                local name = type(el) == "table" and el.name or el
+                local extra = type(el) == "table" and (" (" .. el.price .. " " .. CUR .. ")") or ""
+                if type(el) == "table" and el.category then extra = " ["..el.category.."]" .. extra end
 
-            text(7, y, name .. extra, gui.COLORS.text, gui.COLORS.panel)
-            gui.btn("adm_edit_"..id, W - 32, y, 12, 1, "РЕДАКТ", gui.COLORS.warn)
-            gui.btn("adm_del_"..id, W - 18, y, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
-            y = y + 2
+                text(4, y, name .. extra, gui.COLORS.text, gui.COLORS.panel)
+                gui.btn("adm_edit_"..id, W - 28, y, 12, 1, "РЕДАКТ", gui.COLORS.warn)
+                gui.btn("adm_del_"..id, W - 14, y, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
+                y = y + 2
+            end
         end
     end
     
     local py = H - 4
-    gui.btn("adm_add", 5, py, 24, 3, "ДОБАВИТЬ ЗАПИСЬ", gui.COLORS.good)
+    if substate == "logs" then
+        local filterText = (logFilter == nil or logFilter == "") and "ВСЕ" or unicode.sub(logFilter, 1, 12)
+        gui.btn("filter_logs", 2, py, 24, 3, "ФИЛЬТР: " .. filterText, gui.COLORS.energy)
+        if logFilter ~= nil and logFilter ~= "" then
+            gui.btn("clear_filter", 28, py, 14, 3, "СБРОСИТЬ", gui.COLORS.bad)
+        end
+    else
+        gui.btn("adm_add", 2, py, 24, 3, "ДОБАВИТЬ ЗАПИСЬ", gui.COLORS.good)
+    end
     
     if maxPage > 1 then
         local centerP = math.floor(W / 2)
@@ -257,14 +284,18 @@ end
 function gui.drawEditorModal(data, categories)
     gui.buttons = {}
     local w = 70; local h = 20
-    if data.target == "shop_name" or data.target == "edit_cat" then h = 12 end
+    if data.target == "shop_name" or data.target == "edit_cat" or data.target == "log_filter" then h = 12 end
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
     rect(x, y, w, h, gui.COLORS.tileBg); rect(x, y, w, 2, gui.COLORS.energy)
     center(x, y, w, "РЕДАКТИРОВАНИЕ", gui.COLORS.text, gui.COLORS.energy)
     
-    if data.target == "shop_name" then
+    if data.target == "log_filter" then
+        text(x+4, y+4, "Поиск по логам (ник, действие или товар):", gui.COLORS.label, gui.COLORS.tileBg)
+        local bgName = (data.focus == "name") and gui.COLORS.inputFocus or gui.COLORS.inputBg
+        gui.btn("focus_name", x+4, y+6, w-8, 1, data.name .. ((data.focus == "name") and "_" or ""), bgName, gui.COLORS.text)
+    elseif data.target == "shop_name" then
         text(x+4, y+4, "Новое название магазина:", gui.COLORS.label, gui.COLORS.tileBg)
         local bgName = (data.focus == "name") and gui.COLORS.inputFocus or gui.COLORS.inputBg
         gui.btn("focus_name", x+4, y+6, w-8, 1, data.name .. ((data.focus == "name") and "_" or ""), bgName, gui.COLORS.text)
@@ -298,7 +329,8 @@ function gui.drawEditorModal(data, categories)
         end
     end
     
-    gui.btn("ed_save", x + 4, y + h - 4, math.floor(w/2) - 6, 3, "СОХРАНИТЬ", gui.COLORS.good)
+    local btnText = (data.target == "log_filter") and "ИСКАТЬ" or "СОХРАНИТЬ"
+    gui.btn("ed_save", x + 4, y + h - 4, math.floor(w/2) - 6, 3, btnText, gui.COLORS.good)
     gui.btn("ed_cancel", x + math.floor(w/2) + 2, y + h - 4, math.floor(w/2) - 6, 3, "ОТМЕНА", gui.COLORS.bad)
 end
 
