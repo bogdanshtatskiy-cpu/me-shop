@@ -38,24 +38,40 @@ local ITEMS_PER_PAGE = 20
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
--- === ПРОБИВАЕМ БЛОКИРОВКУ ВРЕМЕНИ ===
+-- === БРОНЕБОЙНОЕ ПОЛУЧЕНИЕ ВРЕМЕНИ ПО КИЕВУ ===
 local function getRealTime()
+    -- ПОПЫТКА 1: timeapi.io (Обычно работает идеально)
     local ok, res = pcall(function()
-        -- Надеваем маску обычного браузера, чтобы сервер времени нас не заблокировал
-        local headers = { ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
-        -- Запрашиваем время Киева в простом текстовом формате (.txt)
-        local handle = require("internet").request("http://worldtimeapi.org/api/timezone/Europe/Kiev.txt", nil, headers)
+        local handle = require("internet").request("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Kyiv")
         local data = ""
         for chunk in handle do data = data .. chunk end
         return data
     end)
     
     if ok and res and res ~= "" then
-        -- Вырезаем дату и время прямо из текста
-        local d, t = string.match(res, "datetime: (%d%d%d%d%-%d%d%-%d%d)T(%d%d:%d%d:%d%d)")
+        local p_ok, parsed = pcall(json.decode, res)
+        if p_ok and parsed and parsed.dateTime then
+            -- Вырезаем дату и время: "2026-03-19T04:14:50" -> "2026-03-19 04:14:50"
+            local d, t = string.match(parsed.dateTime, "(%d%d%d%d%-%d%d%-%d%d)T(%d%d:%d%d:%d%d)")
+            if d and t then return d .. " " .. t end
+        end
+    end
+    
+    -- ПОПЫТКА 2: worldtimeapi.org (Резервный вариант)
+    local ok2, res2 = pcall(function()
+        local headers = { ["User-Agent"] = "Mozilla/5.0" }
+        local handle = require("internet").request("https://worldtimeapi.org/api/timezone/Europe/Kyiv.txt", nil, headers)
+        local data = ""
+        for chunk in handle do data = data .. chunk end
+        return data
+    end)
+    
+    if ok2 and res2 and res2 ~= "" then
+        local d, t = string.match(res2, "datetime: (%d%d%d%d%-%d%d%-%d%d)T(%d%d:%d%d:%d%d)")
         if d and t then return d .. " " .. t end
     end
-    -- Страховка с пометкой, если сервер времени упал
+
+    -- Если оба сервера лежат (что вряд ли), пишем пометку
     return os.date("%Y-%m-%d %H:%M:%S") .. " (Игровое)"
 end
 
