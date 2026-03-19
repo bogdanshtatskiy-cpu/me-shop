@@ -152,221 +152,247 @@ refreshScreen()
 while true do
     local ev, _, arg1, arg2, arg3, arg4 = event.pull(1)
     
-    if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
-        if not ev then 
+    if not ev then 
+        -- === ОБНОВЛЕНИЕ БЕЗ МЕРЦАНИЯ (РАЗ В СЕКУНДУ) ===
+        local shouldRefreshFull = false
+
+        -- 1. Таймер выхода
+        if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
             idleTimer = idleTimer - 1
-            if idleTimer <= 0 then currentUser = nil; cart = {}; state = "shop"; active_category = "ВСЕ" end
+            if idleTimer <= 0 then 
+                currentUser = nil; cart = {}; state = "shop"; active_category = "ВСЕ"
+                shouldRefreshFull = true
+            else
+                if state == "shop" or state == "modal_qty" or state == "cart" then
+                    gui.drawTick(currentUser, idleTimer) -- Обновляем только текст таймера
+                end
+            end
+        end
+
+        -- 2. Сток товаров (только если мы в магазине)
+        if state == "shop" and not shouldRefreshFull then
+            me.updateStock(shop_items)
+            local filtered = {}
+            for _, item in ipairs(shop_items) do
+                if active_category == "ВСЕ" or item.category == active_category then table.insert(filtered, item) end
+            end
+            gui.drawStockTick(filtered) -- Обновляем только цифры в ячейках товаров
+        end
+
+        if shouldRefreshFull then refreshScreen() end
+    
+    else
+        -- === ОБРАБОТКА КЛИКОВ ===
+        if currentUser then idleTimer = 30 end
+
+        if ev == "key_down" and state == "editor" then
+            local char = arg1; local code = arg2
+            local val = (ed_data.focus == "name") and ed_data.name or tostring(ed_data.price)
+            if code == 14 then
+                if unicode.len(val) > 0 then val = unicode.sub(val, 1, -2) end
+            elseif char >= 32 then val = val .. unicode.char(char) end
+            if ed_data.focus == "name" then ed_data.name = val else ed_data.price = val end
             refreshScreen()
-        else idleTimer = 30 end
-    end
+            
+        elseif ev == "clipboard" and state == "editor" then
+            local text = arg1
+            if ed_data.focus == "name" then ed_data.name = ed_data.name .. text
+            else ed_data.price = tostring(ed_data.price) .. text end
+            refreshScreen()
 
-    if ev == "key_down" and state == "editor" then
-        local char = arg1; local code = arg2
-        local val = (ed_data.focus == "name") and ed_data.name or tostring(ed_data.price)
-        if code == 14 then
-            if unicode.len(val) > 0 then val = unicode.sub(val, 1, -2) end
-        elseif char >= 32 then val = val .. unicode.char(char) end
-        if ed_data.focus == "name" then ed_data.name = val else ed_data.price = val end
-        refreshScreen()
-        
-    elseif ev == "clipboard" and state == "editor" then
-        local text = arg1
-        if ed_data.focus == "name" then ed_data.name = ed_data.name .. text
-        else ed_data.price = tostring(ed_data.price) .. text end
-        refreshScreen()
+        elseif ev == "touch" then
+            local x = arg1; local y = arg2; local player_name = arg4
 
-    elseif ev == "touch" then
-        local x = arg1; local y = arg2; local player_name = arg4
-
-        if currentUser and currentUser.name ~= player_name then computer.beep(400, 0.1)
-        else
-            local action = gui.checkClick(x, y)
-            if action then
-                computer.beep(1000, 0.05)
-                
-                if action == "close_admin" then state = "shop"; refreshScreen()
-                elseif action == "open_cart" then state = "cart"; refreshScreen()
-                
-                elseif action == "close_modal" then
-                    if state == "admin_wait_scan" then
-                        local stack, slot = me.peekInput()
-                        if not stack then
-                            state = (ed_data.target == "item") and "admin_item" or "admin_buy"
-                            showMsg("ОШИБКА СКАНЕРА", slot, true)
-                        else
-                            ed_data.isItem = (ed_data.target == "item")
-                            ed_data.orig_name = stack.label
-                            ed_data.orig_id = stack.name
-                            ed_data.damage = stack.damage or 0
-                            ed_data.name = stack.label
-                            ed_data.price = ""
-                            ed_data.cat = categories[2] or "ВСЕ"
-                            ed_data.focus = "name"
-                            ed_data.slot = slot
-                            state = "editor"; refreshScreen()
-                        end
-                    else
-                        state = "shop"; refreshScreen()
-                    end
-                
-                elseif state == "editor" then
-                    if action == "focus_name" then ed_data.focus = "name"; refreshScreen()
-                    elseif action == "focus_price" then ed_data.focus = "price"; refreshScreen()
-                    elseif action:match("setcat_") then
-                        ed_data.cat = action:gsub("setcat_", "")
-                        refreshScreen()
-                    elseif action == "ed_cancel" then
-                        state = (ed_data.target == "item") and "admin_item" or "admin_buy"
-                        refreshScreen()
-                    elseif action == "ed_save" then
-                        local p_str = tostring(ed_data.price):gsub(",", ".")
-                        if p_str == "" or not tonumber(p_str) then
-                            showMsg("ОШИБКА", "Введите корректную цену (число)!", true)
-                        else
-                            if ed_data.isItem then
-                                local db_s = getFreeDBSlot()
-                                if db_s then
-                                    me.storeToDB(ed_data.slot, db_s)
-                                    table.insert(shop_items, { 
-                                        name = ed_data.name, price = tonumber(p_str), category = ed_data.cat, 
-                                        stock = 0, id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name, db_slot = db_s 
-                                    })
-                                    writeLog("ДОБАВЛЕН ТОВАР", currentUser.name, ed_data.name .. " за " .. p_str .. " ЭМ")
-                                else
-                                    showMsg("ОШИБКА", "База данных заполнена!", true); return
-                                end
+            if currentUser and currentUser.name ~= player_name then computer.beep(400, 0.1)
+            else
+                local action = gui.checkClick(x, y)
+                if action then
+                    computer.beep(1000, 0.05)
+                    
+                    if action == "close_admin" then state = "shop"; refreshScreen()
+                    elseif action == "open_cart" then state = "cart"; refreshScreen()
+                    
+                    elseif action == "close_modal" then
+                        if state == "admin_wait_scan" then
+                            local stack, slot = me.peekInput()
+                            if not stack then
+                                state = (ed_data.target == "item") and "admin_item" or "admin_buy"
+                                showMsg("ОШИБКА СКАНЕРА", slot, true)
                             else
-                                table.insert(shop_buyback, { 
-                                    name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name 
-                                })
-                                writeLog("ДОБАВЛЕНА СКУПКА", currentUser.name, ed_data.name .. " по " .. p_str .. " ЭМ")
+                                ed_data.isItem = (ed_data.target == "item")
+                                ed_data.orig_name = stack.label
+                                ed_data.orig_id = stack.name
+                                ed_data.damage = stack.damage or 0
+                                ed_data.name = stack.label
+                                ed_data.price = ""
+                                ed_data.cat = categories[2] or "ВСЕ"
+                                ed_data.focus = "name"
+                                ed_data.slot = slot
+                                state = "editor"; refreshScreen()
                             end
-                            saveShop()
+                        else
+                            state = "shop"; refreshScreen()
+                        end
+                    
+                    elseif state == "editor" then
+                        if action == "focus_name" then ed_data.focus = "name"; refreshScreen()
+                        elseif action == "focus_price" then ed_data.focus = "price"; refreshScreen()
+                        elseif action:match("setcat_") then
+                            ed_data.cat = action:gsub("setcat_", "")
+                            refreshScreen()
+                        elseif action == "ed_cancel" then
                             state = (ed_data.target == "item") and "admin_item" or "admin_buy"
                             refreshScreen()
-                        end
-                    end
-                
-                elseif state == "shop" then
-                    if action == "login" then
-                        local is_adm = false; if config.admins and config.admins[player_name] then is_adm = true end
-                        local bal = 0
-                        if users_db[player_name] then bal = users_db[player_name].balance
-                        else
-                            local succ, res = network.get("/users/" .. player_name)
-                            if succ and res and res ~= "null" then
-                                local udata = json.decode(res)
-                                if udata and udata.balance then bal = udata.balance end
-                            end
-                        end
-                        currentUser = { name = player_name, balance = bal, isAdmin = is_adm }; idleTimer = 30; refreshScreen()
-                    
-                    elseif action == "logout" then currentUser = nil; cart = {}; refreshScreen()
-                    elseif action == "admin_panel" then state = "admin_item"; refreshScreen()
-                    elseif action:match("cat_") then active_category = action:gsub("cat_", ""); refreshScreen()
-                    
-                    elseif action == "sell_all" then
-                        if not currentUser then showMsg("ОШИБКА", "Авторизуйтесь!", true)
-                        else
-                            local success, msg, earned = me.sellAll(shop_buyback)
-                            if success then 
-                                currentUser.balance = currentUser.balance + earned; saveUser()
-                                writeLog("ПРОДАЖА", currentUser.name, msg .. " Начислено: " .. earned .. " ЭМ")
-                                showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false)
-                            else showMsg("ОШИБКА", msg, true) end
-                        end
-                        
-                    elseif action:match("buy_") or action:match("cart_") then
-                        if not currentUser then showMsg("ОШИБКА", "Авторизуйтесь!", true)
-                        else
-                            local idx = tonumber(action:match("%d+"))
-                            local filtered = {}
-                            for _, item in ipairs(shop_items) do
-                                if active_category == "ВСЕ" or item.category == active_category then table.insert(filtered, item) end
-                            end
-                            selectedItem = filtered[idx]
-                            selectedQty = 1
-                            isCartMode = (action:match("cart_") ~= nil)
-                            state = "modal_qty"; refreshScreen()
-                        end
-                    end
-                
-                elseif state == "modal_qty" then
-                    if action == "qty_add1" then selectedQty = selectedQty + 1
-                    elseif action == "qty_sub1" then selectedQty = selectedQty - 1
-                    elseif action == "qty_add10" then selectedQty = selectedQty + 10
-                    elseif action == "qty_sub10" then selectedQty = selectedQty - 10
-                    elseif action == "confirm_cart" then
-                        table.insert(cart, {item = selectedItem, qty = selectedQty}); state = "shop"; refreshScreen()
-                    elseif action == "confirm_buy" then
-                        local cost = selectedItem.price * selectedQty
-                        if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
-                        elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало ЭМ!", true)
-                        else
-                            local ok, msg = me.buyItem(selectedItem, selectedQty)
-                            if ok then
-                                currentUser.balance = currentUser.balance - cost
-                                saveUser(); saveShop()
-                                writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. selectedQty .. " за " .. cost .. " ЭМ")
-                                showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false)
-                            else showMsg("ОШИБКА ВЫДАЧИ", msg, true) end
-                        end
-                    end
-                    if selectedQty < 1 then selectedQty = 1 end
-                    if selectedQty > 64 then selectedQty = 64 end
-                    if state == "modal_qty" then refreshScreen() end
-                
-                elseif state == "cart" then
-                    if action:match("cart_del_") then
-                        local idx = tonumber(action:match("%d+"))
-                        table.remove(cart, idx); refreshScreen()
-                    elseif action == "checkout" then
-                        if #cart == 0 then showMsg("ОШИБКА", "Корзина пуста!", true)
-                        else
-                            local totalCost = 0
-                            for _, ci in ipairs(cart) do totalCost = totalCost + (ci.item.price * ci.qty) end
-                            if currentUser.balance < totalCost then showMsg("ОШИБКА", "Недостаточно средств!", true)
+                        elseif action == "ed_save" then
+                            local p_str = tostring(ed_data.price):gsub(",", ".")
+                            if p_str == "" or not tonumber(p_str) then
+                                showMsg("ОШИБКА", "Введите корректную цену (число)!", true)
                             else
-                                local all_ok = true
-                                for _, ci in ipairs(cart) do
-                                    local ok, msg = me.buyItem(ci.item, ci.qty)
-                                    if not ok then all_ok = false end
+                                if ed_data.isItem then
+                                    local db_s = getFreeDBSlot()
+                                    if db_s then
+                                        me.storeToDB(ed_data.slot, db_s)
+                                        table.insert(shop_items, { 
+                                            name = ed_data.name, price = tonumber(p_str), category = ed_data.cat, 
+                                            stock = 0, id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name, db_slot = db_s 
+                                        })
+                                        writeLog("ДОБАВЛЕН ТОВАР", currentUser.name, ed_data.name .. " за " .. p_str .. " ЭМ")
+                                    else
+                                        showMsg("ОШИБКА", "База данных заполнена!", true); return
+                                    end
+                                else
+                                    table.insert(shop_buyback, { 
+                                        name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name 
+                                    })
+                                    writeLog("ДОБАВЛЕНА СКУПКА", currentUser.name, ed_data.name .. " по " .. p_str .. " ЭМ")
                                 end
-                                
-                                currentUser.balance = currentUser.balance - totalCost
-                                cart = {}
-                                saveUser(); saveShop()
-                                writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, "Оплачена корзина на сумму " .. totalCost .. " ЭМ")
-                                
-                                if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false)
-                                else showMsg("ОШИБКА", "Оплата прошла, но некоторые предметы не выданы!", true) end
+                                saveShop()
+                                state = (ed_data.target == "item") and "admin_item" or "admin_buy"
+                                refreshScreen()
                             end
                         end
-                    end
-
-                elseif string.match(state, "admin") then
-                    if action == "adm_cat" then state = "admin_cat"; refreshScreen()
-                    elseif action == "adm_item" then state = "admin_item"; refreshScreen()
-                    elseif action == "adm_buy" then state = "admin_buy"; refreshScreen()
                     
-                    elseif action == "adm_add" then
-                        if state == "admin_item" or state == "admin_buy" then
-                            ed_data.target = (state == "admin_item") and "item" or "buyback"
-                            state = "admin_wait_scan"
-                            gui.drawNotification("СКАНИРОВАНИЕ", "Положите 1 предмет в сундук и нажмите ОК", false)
-                        end
+                    elseif state == "shop" then
+                        if action == "login" then
+                            local is_adm = false; if config.admins and config.admins[player_name] then is_adm = true end
+                            local bal = 0
+                            if users_db[player_name] then bal = users_db[player_name].balance
+                            else
+                                local succ, res = network.get("/users/" .. player_name)
+                                if succ and res and res ~= "null" then
+                                    local udata = json.decode(res)
+                                    if udata and udata.balance then bal = udata.balance end
+                                end
+                            end
+                            currentUser = { name = player_name, balance = bal, isAdmin = is_adm }; idleTimer = 30; refreshScreen()
                         
-                    elseif action:match("adm_del_") then
-                        local idx = tonumber(action:match("%d+"))
-                        if state == "admin_cat" then table.remove(categories, idx)
-                        elseif state == "admin_item" then 
-                            writeLog("УДАЛЕН ТОВАР", currentUser.name, shop_items[idx].name)
-                            table.remove(shop_items, idx)
-                        elseif state == "admin_buy" then 
-                            writeLog("УДАЛЕНА СКУПКА", currentUser.name, shop_buyback[idx].name)
-                            table.remove(shop_buyback, idx) 
+                        elseif action == "logout" then currentUser = nil; cart = {}; refreshScreen()
+                        elseif action == "admin_panel" then state = "admin_item"; refreshScreen()
+                        elseif action:match("cat_") then active_category = action:gsub("cat_", ""); refreshScreen()
+                        
+                        elseif action == "sell_all" then
+                            if not currentUser then showMsg("ОШИБКА", "Авторизуйтесь!", true)
+                            else
+                                local success, msg, earned = me.sellAll(shop_buyback)
+                                if success then 
+                                    currentUser.balance = currentUser.balance + earned; saveUser()
+                                    writeLog("ПРОДАЖА", currentUser.name, msg .. " Начислено: " .. earned .. " ЭМ")
+                                    showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false)
+                                else showMsg("ОШИБКА", msg, true) end
+                            end
+                            
+                        elseif action:match("buy_") or action:match("cart_") then
+                            if not currentUser then showMsg("ОШИБКА", "Авторизуйтесь!", true)
+                            else
+                                local idx = tonumber(action:match("%d+"))
+                                local filtered = {}
+                                for _, item in ipairs(shop_items) do
+                                    if active_category == "ВСЕ" or item.category == active_category then table.insert(filtered, item) end
+                                end
+                                selectedItem = filtered[idx]
+                                selectedQty = 1
+                                isCartMode = (action:match("cart_") ~= nil)
+                                state = "modal_qty"; refreshScreen()
+                            end
                         end
-                        saveShop(); refreshScreen()
+                    
+                    elseif state == "modal_qty" then
+                        if action == "qty_add1" then selectedQty = selectedQty + 1
+                        elseif action == "qty_sub1" then selectedQty = selectedQty - 1
+                        elseif action == "qty_add10" then selectedQty = selectedQty + 10
+                        elseif action == "qty_sub10" then selectedQty = selectedQty - 10
+                        elseif action == "confirm_cart" then
+                            table.insert(cart, {item = selectedItem, qty = selectedQty}); state = "shop"; refreshScreen()
+                        elseif action == "confirm_buy" then
+                            local cost = selectedItem.price * selectedQty
+                            if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
+                            elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало ЭМ!", true)
+                            else
+                                local ok, msg = me.buyItem(selectedItem, selectedQty)
+                                if ok then
+                                    currentUser.balance = currentUser.balance - cost
+                                    saveUser(); saveShop()
+                                    writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. selectedQty .. " за " .. cost .. " ЭМ")
+                                    showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false)
+                                else showMsg("ОШИБКА ВЫДАЧИ", msg, true) end
+                            end
+                        end
+                        if selectedQty < 1 then selectedQty = 1 end
+                        if selectedQty > 64 then selectedQty = 64 end
+                        if state == "modal_qty" then refreshScreen() end
+                    
+                    elseif state == "cart" then
+                        if action:match("cart_del_") then
+                            local idx = tonumber(action:match("%d+"))
+                            table.remove(cart, idx); refreshScreen()
+                        elseif action == "checkout" then
+                            if #cart == 0 then showMsg("ОШИБКА", "Корзина пуста!", true)
+                            else
+                                local totalCost = 0
+                                for _, ci in ipairs(cart) do totalCost = totalCost + (ci.item.price * ci.qty) end
+                                if currentUser.balance < totalCost then showMsg("ОШИБКА", "Недостаточно средств!", true)
+                                else
+                                    local all_ok = true
+                                    for _, ci in ipairs(cart) do
+                                        local ok, msg = me.buyItem(ci.item, ci.qty)
+                                        if not ok then all_ok = false end
+                                    end
+                                    
+                                    currentUser.balance = currentUser.balance - totalCost
+                                    cart = {}
+                                    saveUser(); saveShop()
+                                    writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, "Оплачена корзина на сумму " .. totalCost .. " ЭМ")
+                                    
+                                    if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false)
+                                    else showMsg("ОШИБКА", "Оплата прошла, но некоторые предметы не выданы!", true) end
+                                end
+                            end
+                        end
+
+                    elseif string.match(state, "admin") then
+                        if action == "adm_cat" then state = "admin_cat"; refreshScreen()
+                        elseif action == "adm_item" then state = "admin_item"; refreshScreen()
+                        elseif action == "adm_buy" then state = "admin_buy"; refreshScreen()
+                        
+                        elseif action == "adm_add" then
+                            if state == "admin_item" or state == "admin_buy" then
+                                ed_data.target = (state == "admin_item") and "item" or "buyback"
+                                state = "admin_wait_scan"
+                                gui.drawNotification("СКАНИРОВАНИЕ", "Положите 1 предмет в сундук и нажмите ОК", false)
+                            end
+                            
+                        elseif action:match("adm_del_") then
+                            local idx = tonumber(action:match("%d+"))
+                            if state == "admin_cat" then table.remove(categories, idx)
+                            elseif state == "admin_item" then 
+                                writeLog("УДАЛЕН ТОВАР", currentUser.name, shop_items[idx].name)
+                                table.remove(shop_items, idx)
+                            elseif state == "admin_buy" then 
+                                writeLog("УДАЛЕНА СКУПКА", currentUser.name, shop_buyback[idx].name)
+                                table.remove(shop_buyback, idx) 
+                            end
+                            saveShop(); refreshScreen()
+                        end
                     end
                 end
             end
