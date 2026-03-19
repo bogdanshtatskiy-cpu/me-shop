@@ -194,6 +194,8 @@ local function getAdminPageItems(list)
     return pageData, maxPage
 end
 
+-- ВАЖНО: Обращение к МЭ сети (me.updateStock) происходит ТОЛЬКО ЗДЕСЬ, 
+-- когда программа перерисовывает экран после действий игрока.
 local function refreshScreen()
     if state == "shop" then
         me.updateStock(shop_items)
@@ -254,9 +256,7 @@ while true do
         end
 
         if state == "shop" and not shouldRefreshFull then
-            me.updateStock(shop_items)
-            local pItems, _ = getPageItems()
-            gui.drawStockTick(pItems)
+            -- МЫ УДАЛИЛИ ОТСЮДА ПОСТОЯННОЕ ОБРАЩЕНИЕ К МЭ (me.updateStock)
             
             if config.use_database then
                 syncTimer = syncTimer - 1
