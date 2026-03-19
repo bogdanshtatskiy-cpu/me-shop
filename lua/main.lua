@@ -33,9 +33,8 @@ local isCartMode = false
 local cart = {}
 local ed_data = {}
 
--- ПЕРЕМЕННЫЕ ДЛЯ СТРАНИЦ
 local currentPage = 1
-local ITEMS_PER_PAGE = 16 -- 4 ряда по 4 товара
+local ITEMS_PER_PAGE = 16
 
 local function writeLog(action, user, details)
     local time_str = os.date("%Y-%m-%d %H:%M:%S")
@@ -377,17 +376,24 @@ while true do
                             if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
                             elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало ЭМ!", true)
                             else
-                                local ok, msg = me.buyItem(selectedItem, selectedQty)
-                                if ok then
-                                    currentUser.balance = currentUser.balance - cost
+                                -- ИСПРАВЛЕНО: Теперь учитывается реально выданное количество
+                                local ok, msg, actual_moved = me.buyItem(selectedItem, selectedQty)
+                                if ok and actual_moved and actual_moved > 0 then
+                                    local actual_cost = selectedItem.price * actual_moved
+                                    currentUser.balance = currentUser.balance - actual_cost
                                     saveUser(); saveShop()
-                                    writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. selectedQty .. " за " .. cost .. " ЭМ")
-                                    showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false, 3)
+                                    writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. actual_moved .. " за " .. actual_cost .. " ЭМ")
+                                    
+                                    if actual_moved < selectedQty then
+                                        showMsg("ВНИМАНИЕ", "Сундук полон! Выдано " .. actual_moved .. " шт. Списано: " .. actual_cost .. " ЭМ", true, 6)
+                                    else
+                                        showMsg("УСПЕХ", "Выдано " .. actual_moved .. " шт. за " .. actual_cost .. " ЭМ", false, 3)
+                                    end
                                 else showMsg("ОШИБКА ВЫДАЧИ", msg, true) end
                             end
                         end
                         if selectedQty < 1 then selectedQty = 1 end
-                        if selectedQty > 64000 then selectedQty = 64000 end -- ОГРОМНЫЙ ЛИМИТ ВМЕСТО 64
+                        if selectedQty > 64000 then selectedQty = 64000 end
                         if state == "modal_qty" then refreshScreen() end
                     
                     elseif state == "cart" then
@@ -402,18 +408,24 @@ while true do
                                 if currentUser.balance < totalCost then showMsg("ОШИБКА", "Недостаточно средств!", true)
                                 else
                                     local all_ok = true
+                                    local actual_total = 0
                                     for _, ci in ipairs(cart) do
-                                        local ok, msg = me.buyItem(ci.item, ci.qty)
-                                        if not ok then all_ok = false end
+                                        local ok, msg, actual_moved = me.buyItem(ci.item, ci.qty)
+                                        if ok and actual_moved and actual_moved > 0 then
+                                            actual_total = actual_total + (ci.item.price * actual_moved)
+                                            if actual_moved < ci.qty then all_ok = false end
+                                        else
+                                            all_ok = false
+                                        end
                                     end
                                     
-                                    currentUser.balance = currentUser.balance - totalCost
+                                    currentUser.balance = currentUser.balance - actual_total
                                     cart = {}
                                     saveUser(); saveShop()
-                                    writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, "Оплачена корзина на сумму " .. totalCost .. " ЭМ")
+                                    writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, "Оплачена корзина на сумму " .. actual_total .. " ЭМ")
                                     
                                     if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false, 3)
-                                    else showMsg("ОШИБКА", "Оплата прошла, но некоторые предметы не выданы!", true) end
+                                    else showMsg("ВНИМАНИЕ", "Места не хватило. Выдано частично! Списано: " .. actual_total .. " ЭМ", true, 6) end
                                 end
                             end
                         end
