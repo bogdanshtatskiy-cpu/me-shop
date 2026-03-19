@@ -146,14 +146,36 @@ function gui.drawBuybackItems(buyback_items)
     gui.btn("sell_all", x, H - 3, w, 3, "ПРОДАТЬ ВСЁ", gui.COLORS.good)
 end
 
+-- === УМНОЕ ОКНО СООБЩЕНИЙ С АВТО-ПЕРЕНОСОМ СТРОК ===
 function gui.drawNotification(title, message, isError)
-    gui.buttons = {}; local w = 60; local h = 10; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
+    gui.buttons = {}; local w = 60
+    
+    local lines = {}
+    local currentLine = ""
+    for word in string.gmatch(message, "%S+") do
+        if unicode.len(currentLine) + unicode.len(word) + 1 > w - 4 then
+            table.insert(lines, currentLine)
+            currentLine = word
+        else
+            currentLine = currentLine == "" and word or (currentLine .. " " .. word)
+        end
+    end
+    if currentLine ~= "" then table.insert(lines, currentLine) end
+
+    local h = math.max(10, 7 + #lines)
+    local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     local titleCol = isError and gui.COLORS.modalBad or gui.COLORS.modalGood
+    
     rect(x, y, w, h, gui.COLORS.tileBg); rect(x, y, w, 2, titleCol)
     center(x, y, w, title, gui.COLORS.text, titleCol)
-    center(x, y + 4, w, message, gui.COLORS.text, gui.COLORS.tileBg)
-    gui.btn("close_modal", x + 20, y + 7, 20, 1, "ОК", gui.COLORS.btn)
+    
+    for i, l in ipairs(lines) do
+        center(x, y + 2 + i, w, l, gui.COLORS.text, gui.COLORS.tileBg)
+    end
+    
+    gui.btn("close_modal", x + 20, y + h - 3, 20, 1, "ОК", gui.COLORS.btn)
 end
+-- ===================================================
 
 function gui.drawQuantitySelector(item, qty, isCartMode)
     gui.buttons = {}; local w = 48; local h = 14; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
