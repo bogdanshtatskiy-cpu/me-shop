@@ -91,17 +91,9 @@
         </main>
     </div>
 
+    <script src="./firebase-config.js"></script>
+    
     <script>
-        const firebaseConfig = {
-  apiKey: "AIzaSyCC468vjicHp5fCkxrxwsHTJQ7cXwdZMOw",
-  authDomain: "me-shop-71468.firebaseapp.com",
-  databaseURL: "https://me-shop-71468-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "me-shop-71468",
-  storageBucket: "me-shop-71468.firebasestorage.app",
-  messagingSenderId: "44514804398",
-  appId: "1:44514804398:web:57f5a99080902486b9233f"
-};
-
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.database();
@@ -110,7 +102,6 @@
             if (user) {
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
-                // Выводим ник без @shop.local
                 document.getElementById('user-email').innerText = user.email.replace('@shop.local', '');
                 loadData(); 
             } else {
@@ -155,12 +146,10 @@
                 const users = snapshot.val() || {};
                 const list = document.getElementById('users-list');
                 list.innerHTML = '';
-                
                 for (const [name, rawData] of Object.entries(users)) {
                     let data = rawData;
                     if (typeof rawData === 'string') { try { data = JSON.parse(rawData); } catch(e) { data = { balance: 0 }; } }
                     const balance = data.balance !== undefined ? data.balance : 0;
-                    
                     list.innerHTML += `
                         <div class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-750 transition">
                             <div class="font-bold text-lg sm:text-base text-white">${name}</div>
@@ -182,15 +171,12 @@
             db.ref('shop').on('value', (snapshot) => {
                 let shopData = snapshot.val() || {};
                 if (typeof shopData === 'string') { try { shopData = JSON.parse(shopData); } catch(e) { shopData = {}; } }
-                
                 const itemsRaw = shopData.items || [];
                 const list = document.getElementById('shop-list');
                 list.innerHTML = '';
-                
                 Object.keys(itemsRaw).forEach(key => {
                     const item = itemsRaw[key];
                     if(!item) return;
-                    
                     list.innerHTML += `
                         <div class="p-4 flex flex-col md:flex-row md:items-center gap-4 hover:bg-gray-750 transition">
                             <div class="flex-1">
@@ -219,7 +205,6 @@
                 const logsRaw = snapshot.val() || {};
                 const list = document.getElementById('logs-list');
                 list.innerHTML = '';
-                
                 const logsArray = [];
                 for (const key in logsRaw) {
                     let log = logsRaw[key];
@@ -227,7 +212,6 @@
                     logsArray.push(log);
                 }
                 logsArray.reverse(); 
-                
                 logsArray.forEach(log => {
                     let actionColor = "text-gray-300";
                     if(log.action.includes("ПОКУПКА")) actionColor = "text-green-400";
@@ -243,9 +227,7 @@
                                 </div>
                                 <span class="text-xs font-mono text-gray-400">${log.time}</span>
                             </div>
-                            <div class="text-sm text-gray-300 break-words mt-1">
-                                ${log.details}
-                            </div>
+                            <div class="text-sm text-gray-300 break-words mt-1">${log.details}</div>
                         </div>
                     `;
                 });
@@ -266,9 +248,7 @@
             
             db.ref('shop').once('value').then((snapshot) => {
                 let shopData = snapshot.val() || {};
-                if (typeof shopData === 'string') {
-                    try { shopData = JSON.parse(shopData); } catch(e) { shopData = { items: [] }; }
-                }
+                if (typeof shopData === 'string') { try { shopData = JSON.parse(shopData); } catch(e) { shopData = { items: [] }; } }
                 if (shopData.items && shopData.items[key]) {
                     shopData.items[key].name = name;
                     shopData.items[key].category = cat;
@@ -282,18 +262,13 @@
 
         window.deleteItem = function(key) {
             if (!confirm('Удалить товар навсегда?')) return;
-
             db.ref('shop').once('value').then((snapshot) => {
                 let shopData = snapshot.val() || {};
-                if (typeof shopData === 'string') {
-                    try { shopData = JSON.parse(shopData); } catch(e) { shopData = { items: [] }; }
-                }
-                
+                if (typeof shopData === 'string') { try { shopData = JSON.parse(shopData); } catch(e) { shopData = { items: [] }; } }
                 if (shopData.items) {
                     let itemsArray = Array.isArray(shopData.items) ? shopData.items : Object.values(shopData.items);
                     itemsArray.splice(Number(key), 1);
                     shopData.items = itemsArray.filter(Boolean);
-                    
                     db.ref('shop').set(shopData)
                       .then(() => showToast('Товар удален', 'success'))
                       .catch(e => showToast('Ошибка удаления', 'error'));
@@ -306,15 +281,8 @@
             toast.className = `fixed bottom-4 right-4 sm:bottom-8 sm:right-8 px-6 py-4 rounded-lg shadow-2xl text-white font-medium transition-all duration-300 transform translate-y-10 opacity-0 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'} z-50`;
             toast.innerText = message;
             document.body.appendChild(toast);
-            
-            requestAnimationFrame(() => {
-                toast.classList.remove('translate-y-10', 'opacity-0');
-            });
-            
-            setTimeout(() => { 
-                toast.classList.add('translate-y-10', 'opacity-0'); 
-                setTimeout(() => toast.remove(), 300); 
-            }, 3000);
+            requestAnimationFrame(() => { toast.classList.remove('translate-y-10', 'opacity-0'); });
+            setTimeout(() => { toast.classList.add('translate-y-10', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
         }
     </script>
 </body>
