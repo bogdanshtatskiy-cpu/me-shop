@@ -40,12 +40,19 @@ local ITEMS_PER_PAGE = 20
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
+-- === УМНОЕ ПОЛУЧЕНИЕ ВРЕМЕНИ С УЧЕТОМ ЧАСОВОГО ПОЯСА ===
 local function getRealTime()
     if not config.use_database then return os.date("%Y-%m-%d %H:%M:%S") .. " (Локальное)" end
     
+    -- Конвертируем понятный UTC+X в системный формат IANA (знаки инвертированы)
+    local tz = tonumber(config.timezone) or 0
+    local tz_str = "Etc/UTC"
+    if tz > 0 then tz_str = "Etc/GMT-" .. tostring(tz)
+    elseif tz < 0 then tz_str = "Etc/GMT+" .. tostring(math.abs(tz)) end
+
     local ok, res = pcall(function()
         local headers = { ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
-        local handle = require("internet").request("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Kyiv", nil, headers)
+        local handle = require("internet").request("https://timeapi.io/api/Time/current/zone?timeZone=" .. tz_str, nil, headers)
         local data = ""
         for chunk in handle do data = data .. chunk end
         return data
@@ -57,9 +64,10 @@ local function getRealTime()
             if d and t then return d .. " " .. t end
         end
     end
+    
     local ok2, res2 = pcall(function()
         local headers = { ["User-Agent"] = "Mozilla/5.0" }
-        local handle = require("internet").request("https://worldtimeapi.org/api/timezone/Europe/Kyiv.txt", nil, headers)
+        local handle = require("internet").request("https://worldtimeapi.org/api/timezone/" .. tz_str .. ".txt", nil, headers)
         local data = ""
         for chunk in handle do data = data .. chunk end
         return data
@@ -194,8 +202,6 @@ local function getAdminPageItems(list)
     return pageData, maxPage
 end
 
--- ВАЖНО: Обращение к МЭ сети (me.updateStock) происходит ТОЛЬКО ЗДЕСЬ, 
--- когда программа перерисовывает экран после действий игрока.
 local function refreshScreen()
     if state == "shop" then
         me.updateStock(shop_items)
@@ -256,8 +262,6 @@ while true do
         end
 
         if state == "shop" and not shouldRefreshFull then
-            -- МЫ УДАЛИЛИ ОТСЮДА ПОСТОЯННОЕ ОБРАЩЕНИЕ К МЭ (me.updateStock)
-            
             if config.use_database then
                 syncTimer = syncTimer - 1
                 if syncTimer <= 0 then
