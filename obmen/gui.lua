@@ -15,7 +15,6 @@ gui.COLORS = {
 }
 
 local W, H = gpu.getResolution()
-
 local function rect(x, y, w, h, col) gpu.setBackground(col); gpu.fill(x, y, w, h, " ") end
 local function text(x, y, str, fg, bg) if bg then gpu.setBackground(bg) end; gpu.setForeground(fg); gpu.set(x, y, str) end
 local function center(x, y, w, str, fg, bg) 
@@ -34,20 +33,17 @@ end
 function gui.drawMain(trades)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, W, 3, gui.COLORS.panel)
-    center(1, 2, W, "АВТОМАТИЧЕСКИЙ ОБМЕННИК", gui.COLORS.energy, gui.COLORS.panel)
+    center(1, 2, W, "АВТОМАТИЧЕСКИЙ ОБМЕННИК РУД", gui.COLORS.energy, gui.COLORS.panel)
     
     gui.btn("admin_login", W - 14, 2, 12, 1, "АДМИН", gui.COLORS.btn)
-    
     text(4, 5, "ДОСТУПНЫЕ ОБМЕНЫ (Просто положите ресурсы в левый сундук):", gui.COLORS.warn, gui.COLORS.bg)
     
     local y = 7
-    if #trades == 0 then
-        text(4, y, "Обменов пока нет...", gui.COLORS.label, gui.COLORS.bg)
+    if #trades == 0 then text(4, y, "Обменов пока нет...", gui.COLORS.label, gui.COLORS.bg)
     else
         for _, t in ipairs(trades) do
-            local line = string.format("%s 1шт  ->  %s %dшт  (Доступно в МЭ: %d шт)", t.in_label, t.out_label, t.ratio, t.stock or 0)
-            text(4, y, line, gui.COLORS.text, gui.COLORS.bg)
-            y = y + 2
+            local line = string.format("%s 1шт  ->  %s %dшт  (В сети: %d шт)", t.in_label, t.out_label, t.ratio, t.stock or 0)
+            text(4, y, line, gui.COLORS.text, gui.COLORS.bg); y = y + 2
         end
     end
 end
@@ -76,9 +72,9 @@ function gui.drawAdmin(substate, items, page, maxPage)
                 else text(6, y, unicode.sub(str, 1, W - 12), actionCol, gui.COLORS.panel) end
                 y = y + 1
             else
-                local line = string.format("%s -> %s (x%d)", el.in_label, el.out_label, el.ratio)
+                local line = string.format("%s -> %s (x%d)", el.item.in_label, el.item.out_label, el.item.ratio)
                 text(6, y, line, gui.COLORS.text, gui.COLORS.panel)
-                gui.btn("adm_del_"..i, W - 20, y, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
+                gui.btn("adm_del_"..el.origIdx, W - 20, y, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
                 y = y + 2
             end
         end
@@ -86,7 +82,6 @@ function gui.drawAdmin(substate, items, page, maxPage)
     
     local py = H - 4
     if substate == "trades" then gui.btn("adm_add", 4, py, 24, 3, "ДОБАВИТЬ ОБМЕН", gui.COLORS.good) end
-    
     if maxPage > 1 then
         local centerP = math.floor(W / 2)
         if page > 1 then gui.btn("adm_prev", centerP - 18, py, 12, 3, "<- НАЗАД", gui.COLORS.btnActive) end
@@ -97,9 +92,7 @@ end
 
 function gui.drawEditorModal(data)
     gui.buttons = {}
-    local w = 70; local h = 16
-    local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
-    
+    local w = 70; local h = 16; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
     rect(x, y, w, h, gui.COLORS.tileBg); rect(x, y, w, 2, gui.COLORS.energy)
     center(x, y, w, "НАСТРОЙКА ОБМЕНА", gui.COLORS.text, gui.COLORS.energy)
@@ -121,8 +114,7 @@ function gui.drawEditorModal(data)
 end
 
 function gui.drawNotification(title, message, isError)
-    gui.buttons = {}; local w = 60; local h = 10
-    local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
+    gui.buttons = {}; local w = 60; local h = 10; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     local titleCol = isError and gui.COLORS.modalBad or gui.COLORS.modalGood
     rect(x, y, w, h, gui.COLORS.tileBg); rect(x, y, w, 2, titleCol)
     center(x, y, w, title, gui.COLORS.text, titleCol)
