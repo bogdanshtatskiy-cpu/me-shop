@@ -2,10 +2,12 @@
 local component = require("component")
 local term = require("term")
 local unicode = require("unicode")
+local config = require("config")
 local gpu = component.gpu
 
 local gui = {}
 gui.buttons = {}
+local CUR = config.currency_name or "ЭМ"
 
 gui.COLORS = {
     bg = 0x111111, tileBg = 0x222222, tileHeader = 0x333333,
@@ -45,7 +47,7 @@ function gui.drawStatic(user, timer, cart_count, top3, shopName)
         gui.btn("logout", rightColX + 2, rY, rightColW - 4, 3, "ВЫХОД", gui.COLORS.bad)
         rY = rY + 4
         center(rightColX, rY, rightColW, user.name, gui.COLORS.good, gui.COLORS.panel); rY = rY + 1
-        center(rightColX, rY, rightColW, user.balance .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel); rY = rY + 2
+        center(rightColX, rY, rightColW, user.balance .. " " .. CUR, gui.COLORS.warn, gui.COLORS.panel); rY = rY + 2
         if timer then center(rightColX, rY, rightColW, "Выход через: " .. timer .. "с", gui.COLORS.label, gui.COLORS.panel) end
         rY = rY + 2
         gui.btn("open_cart", rightColX + 2, rY, rightColW - 4, 3, "КОРЗИНА (" .. (cart_count or 0) .. ")", gui.COLORS.btnActive)
@@ -64,7 +66,7 @@ function gui.drawStatic(user, timer, cart_count, top3, shopName)
     if top3 and #top3 > 0 then
         for i, t in ipairs(top3) do
             text(rightColX + 2, rY, i .. ". " .. t.name, gui.COLORS.text, gui.COLORS.panel)
-            text(rightColX + rightColW - string.len(tostring(t.balance)) - 5, rY, t.balance .. " ЭМ", gui.COLORS.good, gui.COLORS.panel)
+            text(rightColX + rightColW - string.len(tostring(t.balance)) - string.len(CUR) - 3, rY, t.balance .. " " .. CUR, gui.COLORS.good, gui.COLORS.panel)
             rY = rY + 1
         end
     else
@@ -100,7 +102,7 @@ function gui.drawItems(pageItems, page, maxPage)
         
         rect(x, y, tileW, tileH, gui.COLORS.tileBg)
         center(x, y, tileW, item.name, gui.COLORS.text, gui.COLORS.tileHeader)
-        text(x + 2, y + 2, "Цена: " .. item.price .. " ЭМ", gui.COLORS.warn, gui.COLORS.tileBg)
+        text(x + 2, y + 2, "Цена: " .. item.price .. " " .. CUR, gui.COLORS.warn, gui.COLORS.tileBg)
         
         local stockCol = (item.stock and item.stock > 0) and gui.COLORS.label or gui.COLORS.bad
         text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0), stockCol, gui.COLORS.tileBg)
@@ -139,14 +141,13 @@ function gui.drawBuybackItems(buyback_items)
     local x = rightColX + 2; local w = rightColW - 4
     for i, item in ipairs(buyback_items) do
         if startY < H - 4 then
-            text(x, startY, "- " .. item.name .. " (" .. item.price .. " ЭМ)", gui.COLORS.warn, gui.COLORS.panel)
+            text(x, startY, "- " .. item.name .. " (" .. item.price .. " " .. CUR .. ")", gui.COLORS.warn, gui.COLORS.panel)
             startY = startY + 1
         end
     end
     gui.btn("sell_all", x, H - 3, w, 3, "ПРОДАТЬ ВСЁ", gui.COLORS.good)
 end
 
--- === УМНОЕ ОКНО СООБЩЕНИЙ С АВТО-ПЕРЕНОСОМ СТРОК ===
 function gui.drawNotification(title, message, isError)
     gui.buttons = {}; local w = 60
     
@@ -169,13 +170,10 @@ function gui.drawNotification(title, message, isError)
     rect(x, y, w, h, gui.COLORS.tileBg); rect(x, y, w, 2, titleCol)
     center(x, y, w, title, gui.COLORS.text, titleCol)
     
-    for i, l in ipairs(lines) do
-        center(x, y + 2 + i, w, l, gui.COLORS.text, gui.COLORS.tileBg)
-    end
+    for i, l in ipairs(lines) do center(x, y + 2 + i, w, l, gui.COLORS.text, gui.COLORS.tileBg) end
     
     gui.btn("close_modal", x + 20, y + h - 3, 20, 1, "ОК", gui.COLORS.btn)
 end
--- ===================================================
 
 function gui.drawQuantitySelector(item, qty, isCartMode)
     gui.buttons = {}; local w = 48; local h = 14; local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
@@ -194,7 +192,7 @@ function gui.drawQuantitySelector(item, qty, isCartMode)
     gui.btn("qty_add100", x + 32, y + 9, 6, 1, "+100", gui.COLORS.good)
     gui.btn("qty_add1000", x + 39, y + 9, 7, 1, "+1000", gui.COLORS.good)
     
-    center(x, y + 11, w, "Сумма: " .. (item.price * qty) .. " ЭМ", gui.COLORS.warn, gui.COLORS.tileBg)
+    center(x, y + 11, w, "Сумма: " .. (item.price * qty) .. " " .. CUR, gui.COLORS.warn, gui.COLORS.tileBg)
     
     local btnAction = isCartMode and "confirm_cart" or "confirm_buy"
     local btnText = isCartMode and "ДОБАВИТЬ В КОРЗИНУ" or "ПОДТВЕРДИТЬ ПОКУПКУ"
@@ -216,7 +214,7 @@ function gui.drawCart(cart_items)
             if curY < y + h - 5 then
                 local cost = ci.item.price * ci.qty; totalCost = totalCost + cost
                 text(x + 2, curY, ci.item.name .. " x" .. ci.qty, gui.COLORS.text, gui.COLORS.panel)
-                text(x + w - 15, curY, cost .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
+                text(x + w - string.len(tostring(cost)) - string.len(CUR) - 9, curY, cost .. " " .. CUR, gui.COLORS.warn, gui.COLORS.panel)
                 gui.btn("cart_del_"..i, x + w - 6, curY, 4, 1, "X", gui.COLORS.bad)
                 curY = curY + 2
             end
@@ -225,7 +223,7 @@ function gui.drawCart(cart_items)
     rect(x, y + h - 4, w, 1, gui.COLORS.tileHeader)
     
     gui.btn("close_modal", x + 2, y + h - 3, 12, 3, "НАЗАД", gui.COLORS.btn)
-    text(x + 16, y + h - 2, "ИТОГО: " .. totalCost .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
+    text(x + 16, y + h - 2, "ИТОГО: " .. totalCost .. " " .. CUR, gui.COLORS.warn, gui.COLORS.panel)
     gui.btn("checkout", x + w - 20, y + h - 3, 18, 3, "ОПЛАТИТЬ", gui.COLORS.good)
 end
 
@@ -247,7 +245,7 @@ function gui.drawAdmin(substate, pageItems, page, maxPage)
             local id = pItem.origIdx
             
             local name = type(el) == "table" and el.name or el
-            local extra = type(el) == "table" and (" (" .. el.price .. " ЭМ)") or ""
+            local extra = type(el) == "table" and (" (" .. el.price .. " " .. CUR .. ")") or ""
             if type(el) == "table" and el.category then extra = " ["..el.category.."]" .. extra end
 
             text(7, y, name .. extra, gui.COLORS.text, gui.COLORS.panel)
