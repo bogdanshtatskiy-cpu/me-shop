@@ -20,17 +20,22 @@ local shop_items = {}
 local shop_buyback = {}
 local categories = {"ВСЕ", "Ресурсы", "Механизмы", "Броня"}
 local users_db = {} 
+local shop_name = "МЭ МАГАЗИН"
 
 local active_category = "ВСЕ"
 local currentUser = nil
 local idleTimer = 0
-local msgTimer = 0  -- ТАЙМЕР АВТОЗАКРЫТИЯ ОКНА
+local msgTimer = 0
 local state = "shop"
 local selectedItem = nil
 local selectedQty = 1
 local isCartMode = false
 local cart = {}
 local ed_data = {}
+
+-- ПЕРЕМЕННЫЕ ДЛЯ СТРАНИЦ
+local currentPage = 1
+local ITEMS_PER_PAGE = 16 -- 4 ряда по 4 товара
 
 local function writeLog(action, user, details)
     local time_str = os.date("%Y-%m-%d %H:%M:%S")
@@ -59,6 +64,15 @@ local function saveUser()
     pcall(function() network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end)
 end
 
+local function getTop3Players()
+    local sorted = {}
+    for name, data in pairs(users_db) do table.insert(sorted, {name = name, balance = data.balance}) end
+    table.sort(sorted, function(a, b) return a.balance > b.balance end)
+    local top3 = {}
+    for i = 1, math.min(3, #sorted) do table.insert(top3, sorted[i]) end
+    return top3
+end
+
 local function loadShopLocal()
     local f = io.open("/home/shop_data.json", "r")
     if f then
@@ -70,6 +84,7 @@ local function loadShopLocal()
                 if parsed.categories then categories = parsed.categories end
                 if parsed.items then shop_items = parsed.items end
                 if parsed.buyback then shop_buyback = parsed.buyback end
+                if parsed.shop_name then shop_name = parsed.shop_name end
                 return true
             end
         end
@@ -78,7 +93,7 @@ local function loadShopLocal()
 end
 
 local function saveShop()
-    local data = { categories = categories, items = shop_items, buyback = shop_buyback }
+    local data = { categories = categories, items = shop_items, buyback = shop_buyback, shop_name = shop_name }
     local encoded = json.encode(data)
     local f = io.open("/home/shop_data.json", "w")
     if f then f:write(encoded); f:close() end
@@ -95,6 +110,7 @@ local function loadDB()
                 if parsed.categories then categories = parsed.categories end
                 if parsed.items then shop_items = parsed.items end
                 if parsed.buyback then shop_buyback = parsed.buyback end
+                if parsed.shop_name then shop_name = parsed.shop_name end
                 saveShop()
             end
         else saveShop() end
@@ -108,28 +124,46 @@ local function getFreeDBSlot()
     return nil
 end
 
+local function getPageItems()
+    local filtered = {}
+    for i, item in ipairs(shop_items) do
+        if active_category == "ВСЕ" or item.category == active_category then 
+            table.insert(filtered, {item = item, origIdx = i}) 
+        end
+    end
+    
+    local maxPage = math.ceil(#filtered / ITEMS_PER_PAGE)
+    if maxPage < 1 then maxPage = 1 end
+    if currentPage > maxPage then currentPage = maxPage end
+    
+    local pageData = {}
+    local startIdx = (currentPage - 1) * ITEMS_PER_PAGE + 1
+    local endIdx = math.min(startIdx + ITEMS_PER_PAGE - 1, #filtered)
+    
+    for i = startIdx, endIdx do
+        table.insert(pageData, filtered[i])
+    end
+    return pageData, maxPage
+end
+
 local function refreshScreen()
     if state == "shop" then
         me.updateStock(shop_items)
-        gui.drawStatic(currentUser, currentUser and idleTimer or nil, #cart)
+        gui.drawStatic(currentUser, currentUser and idleTimer or nil, #cart, getTop3Players(), shop_name)
         gui.drawCategories(categories, active_category)
-        local filtered = {}
-        for _, item in ipairs(shop_items) do
-            if active_category == "ВСЕ" or item.category == active_category then table.insert(filtered, item) end
-        end
-        gui.drawItems(filtered)
-        gui.drawBuybackItems(shop_buyback, currentUser ~= nil)
         
-        if not me_ok then 
-            component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg)
-        end
+        local pItems, maxPage = getPageItems()
+        gui.drawItems(pItems, currentPage, maxPage)
+        gui.drawBuybackItems(shop_buyback)
+        
+        if not me_ok then component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg) end
         
     elseif state == "modal_qty" then
-        gui.drawStatic(currentUser, idleTimer, #cart)
+        gui.drawStatic(currentUser, idleTimer, #cart, getTop3Players(), shop_name)
         gui.drawQuantitySelector(selectedItem, selectedQty, isCartMode)
         
     elseif state == "cart" then
-        gui.drawStatic(currentUser, idleTimer, #cart)
+        gui.drawStatic(currentUser, idleTimer, #cart, getTop3Players(), shop_name)
         gui.drawCart(cart)
         
     elseif state == "admin_cat" then gui.drawAdmin("cat", categories)
@@ -137,15 +171,14 @@ local function refreshScreen()
     elseif state == "admin_buy" then gui.drawAdmin("buy", shop_buyback)
         
     elseif state == "editor" then
-        gui.drawStatic(currentUser, idleTimer, #cart)
+        gui.drawStatic(currentUser, idleTimer, #cart, getTop3Players(), shop_name)
         gui.drawEditorModal(ed_data, categories)
     end
 end
 
--- === ОБНОВЛЕННАЯ ФУНКЦИЯ УВЕДОМЛЕНИЙ (С ТАЙМЕРОМ) ===
 local function showMsg(title, text, isError, timeout)
     state = "modal_msg"
-    msgTimer = timeout or 0 -- Если timeout задан, окно закроется само
+    msgTimer = timeout or 0
     gui.drawNotification(title, text, isError)
 end
 
@@ -158,20 +191,15 @@ while true do
     if not ev then 
         local shouldRefreshFull = false
 
-        -- === АВТОЗАКРЫТИЕ ОКНА УВЕДОМЛЕНИЙ ===
         if state == "modal_msg" and msgTimer > 0 then
             msgTimer = msgTimer - 1
-            if msgTimer <= 0 then
-                state = "shop"
-                shouldRefreshFull = true
-            end
+            if msgTimer <= 0 then state = "shop"; shouldRefreshFull = true end
         end
 
-        -- Таймер выхода пользователя
         if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
             idleTimer = idleTimer - 1
             if idleTimer <= 0 then 
-                currentUser = nil; cart = {}; state = "shop"; active_category = "ВСЕ"
+                currentUser = nil; cart = {}; state = "shop"; active_category = "ВСЕ"; currentPage = 1
                 shouldRefreshFull = true
             else
                 if state == "shop" or state == "modal_qty" or state == "cart" then
@@ -182,11 +210,8 @@ while true do
 
         if state == "shop" and not shouldRefreshFull then
             me.updateStock(shop_items)
-            local filtered = {}
-            for _, item in ipairs(shop_items) do
-                if active_category == "ВСЕ" or item.category == active_category then table.insert(filtered, item) end
-            end
-            gui.drawStockTick(filtered)
+            local pItems, _ = getPageItems()
+            gui.drawStockTick(pItems)
         end
 
         if shouldRefreshFull then refreshScreen() end
@@ -218,8 +243,15 @@ while true do
                 if action then
                     computer.beep(1000, 0.05)
                     
-                    if action == "close_admin" then state = "shop"; refreshScreen()
+                    if action == "page_prev" then currentPage = currentPage - 1; refreshScreen()
+                    elseif action == "page_next" then currentPage = currentPage + 1; refreshScreen()
+                    
+                    elseif action == "close_admin" then state = "shop"; refreshScreen()
                     elseif action == "open_cart" then state = "cart"; refreshScreen()
+                    
+                    elseif action == "adm_name" then
+                        ed_data = {target = "shop_name", focus = "name", name = shop_name, isItem = false}
+                        state = "editor"; refreshScreen()
                     
                     elseif action == "close_modal" then
                         if state == "admin_wait_scan" then
@@ -251,33 +283,41 @@ while true do
                             refreshScreen()
                         elseif action == "ed_cancel" then
                             state = (ed_data.target == "item") and "admin_item" or "admin_buy"
+                            if ed_data.target == "shop_name" then state = "admin_item" end
                             refreshScreen()
                         elseif action == "ed_save" then
-                            local p_str = tostring(ed_data.price):gsub(",", ".")
-                            if p_str == "" or not tonumber(p_str) then
-                                showMsg("ОШИБКА", "Введите корректную цену (число)!", true)
-                            else
-                                if ed_data.isItem then
-                                    local db_s = getFreeDBSlot()
-                                    if db_s then
-                                        me.storeToDB(ed_data.slot, db_s)
-                                        table.insert(shop_items, { 
-                                            name = ed_data.name, price = tonumber(p_str), category = ed_data.cat, 
-                                            stock = 0, id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name, db_slot = db_s 
-                                        })
-                                        writeLog("ДОБАВЛЕН ТОВАР", currentUser.name, ed_data.name .. " за " .. p_str .. " ЭМ")
-                                    else
-                                        showMsg("ОШИБКА", "База данных заполнена!", true); return
-                                    end
-                                else
-                                    table.insert(shop_buyback, { 
-                                        name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name 
-                                    })
-                                    writeLog("ДОБАВЛЕНА СКУПКА", currentUser.name, ed_data.name .. " по " .. p_str .. " ЭМ")
-                                end
+                            if ed_data.target == "shop_name" then
+                                shop_name = ed_data.name
                                 saveShop()
-                                state = (ed_data.target == "item") and "admin_item" or "admin_buy"
+                                state = "admin_item"
                                 refreshScreen()
+                            else
+                                local p_str = tostring(ed_data.price):gsub(",", ".")
+                                if p_str == "" or not tonumber(p_str) then
+                                    showMsg("ОШИБКА", "Введите корректную цену (число)!", true)
+                                else
+                                    if ed_data.isItem then
+                                        local db_s = getFreeDBSlot()
+                                        if db_s then
+                                            me.storeToDB(ed_data.slot, db_s)
+                                            table.insert(shop_items, { 
+                                                name = ed_data.name, price = tonumber(p_str), category = ed_data.cat, 
+                                                stock = 0, id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name, db_slot = db_s 
+                                            })
+                                            writeLog("ДОБАВЛЕН ТОВАР", currentUser.name, ed_data.name .. " за " .. p_str .. " ЭМ")
+                                        else
+                                            showMsg("ОШИБКА", "База данных заполнена!", true); return
+                                        end
+                                    else
+                                        table.insert(shop_buyback, { 
+                                            name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name 
+                                        })
+                                        writeLog("ДОБАВЛЕНА СКУПКА", currentUser.name, ed_data.name .. " по " .. p_str .. " ЭМ")
+                                    end
+                                    saveShop()
+                                    state = (ed_data.target == "item") and "admin_item" or "admin_buy"
+                                    refreshScreen()
+                                end
                             end
                         end
                     
@@ -295,9 +335,9 @@ while true do
                             end
                             currentUser = { name = player_name, balance = bal, isAdmin = is_adm }; idleTimer = 30; refreshScreen()
                         
-                        elseif action == "logout" then currentUser = nil; cart = {}; refreshScreen()
+                        elseif action == "logout" then currentUser = nil; cart = {}; currentPage = 1; refreshScreen()
                         elseif action == "admin_panel" then state = "admin_item"; refreshScreen()
-                        elseif action:match("cat_") then active_category = action:gsub("cat_", ""); refreshScreen()
+                        elseif action:match("cat_") then active_category = action:gsub("cat_", ""); currentPage = 1; refreshScreen()
                         
                         elseif action == "sell_all" then
                             if not currentUser then showMsg("ОШИБКА", "Авторизуйтесь!", true)
@@ -306,7 +346,6 @@ while true do
                                 if success then 
                                     currentUser.balance = currentUser.balance + earned; saveUser()
                                     writeLog("ПРОДАЖА", currentUser.name, msg .. " Начислено: " .. earned .. " ЭМ")
-                                    -- ДОБАВЛЕН ТАЙМЕР НА 3 СЕКУНДЫ
                                     showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false, 3)
                                 else showMsg("ОШИБКА", msg, true) end
                             end
@@ -314,12 +353,8 @@ while true do
                         elseif action:match("buy_") or action:match("cart_") then
                             if not currentUser then showMsg("ОШИБКА", "Авторизуйтесь!", true)
                             else
-                                local idx = tonumber(action:match("%d+"))
-                                local filtered = {}
-                                for _, item in ipairs(shop_items) do
-                                    if active_category == "ВСЕ" or item.category == active_category then table.insert(filtered, item) end
-                                end
-                                selectedItem = filtered[idx]
+                                local origIdx = tonumber(action:match("%d+"))
+                                selectedItem = shop_items[origIdx]
                                 selectedQty = 1
                                 isCartMode = (action:match("cart_") ~= nil)
                                 state = "modal_qty"; refreshScreen()
@@ -331,6 +366,10 @@ while true do
                         elseif action == "qty_sub1" then selectedQty = selectedQty - 1
                         elseif action == "qty_add10" then selectedQty = selectedQty + 10
                         elseif action == "qty_sub10" then selectedQty = selectedQty - 10
+                        elseif action == "qty_add100" then selectedQty = selectedQty + 100
+                        elseif action == "qty_sub100" then selectedQty = selectedQty - 100
+                        elseif action == "qty_add1000" then selectedQty = selectedQty + 1000
+                        elseif action == "qty_sub1000" then selectedQty = selectedQty - 1000
                         elseif action == "confirm_cart" then
                             table.insert(cart, {item = selectedItem, qty = selectedQty}); state = "shop"; refreshScreen()
                         elseif action == "confirm_buy" then
@@ -343,13 +382,12 @@ while true do
                                     currentUser.balance = currentUser.balance - cost
                                     saveUser(); saveShop()
                                     writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. selectedQty .. " за " .. cost .. " ЭМ")
-                                    -- ДОБАВЛЕН ТАЙМЕР НА 3 СЕКУНДЫ
                                     showMsg("УСПЕХ", "Выдано " .. selectedQty .. " шт. за " .. cost .. " ЭМ", false, 3)
                                 else showMsg("ОШИБКА ВЫДАЧИ", msg, true) end
                             end
                         end
                         if selectedQty < 1 then selectedQty = 1 end
-                        if selectedQty > 64 then selectedQty = 64 end
+                        if selectedQty > 64000 then selectedQty = 64000 end -- ОГРОМНЫЙ ЛИМИТ ВМЕСТО 64
                         if state == "modal_qty" then refreshScreen() end
                     
                     elseif state == "cart" then
@@ -384,7 +422,9 @@ while true do
                         if action == "adm_cat" then state = "admin_cat"; refreshScreen()
                         elseif action == "adm_item" then state = "admin_item"; refreshScreen()
                         elseif action == "adm_buy" then state = "admin_buy"; refreshScreen()
-                        
+                        elseif action == "adm_name" then
+                            ed_data = {target = "shop_name", focus = "name", name = shop_name, isItem = false}
+                            state = "editor"; refreshScreen()
                         elseif action == "adm_add" then
                             if state == "admin_item" or state == "admin_buy" then
                                 ed_data.target = (state == "admin_item") and "item" or "buyback"
