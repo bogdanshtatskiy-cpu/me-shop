@@ -26,7 +26,7 @@ local active_category = "ВСЕ"
 local currentUser = nil
 local idleTimer = 0
 local msgTimer = 0
-local syncTimer = 15 -- ТАЙМЕР СИНХРОНИЗАЦИИ С БД (15 секунд)
+local syncTimer = 15
 local state = "shop"
 local selectedItem = nil
 local selectedQty = 1
@@ -124,7 +124,6 @@ local function saveShop()
     pcall(function() network.put("/shop", encoded) end)
 end
 
--- ИСПРАВЛЕНО: Теперь облако всегда в приоритете над локальными файлами
 local function loadDB()
     local succ_shop, res_shop = network.get("/shop")
     if succ_shop and res_shop and res_shop ~= "null" then
@@ -250,7 +249,6 @@ while true do
             local pItems, _ = getPageItems()
             gui.drawStockTick(pItems)
             
-            -- ФОНОВАЯ СИНХРОНИЗАЦИЯ С БД КАЖДЫЕ 15 СЕКУНД
             syncTimer = syncTimer - 1
             if syncTimer <= 0 then
                 syncTimer = 15
@@ -444,7 +442,13 @@ while true do
                         elseif action == "qty_sub100" then selectedQty = selectedQty - 100
                         elseif action == "qty_add1000" then selectedQty = selectedQty + 1000
                         elseif action == "qty_sub1000" then selectedQty = selectedQty - 1000
-                        elseif action == "confirm_cart" then table.insert(cart, {item = selectedItem, qty = selectedQty}); state = "shop"; refreshScreen()
+                        elseif action == "confirm_cart" then 
+                            -- ИСПРАВЛЕНО: ЗАЩИТА ОТ ДОБАВЛЕНИЯ В КОРЗИНУ ПРИ НЕХВАТКЕ ТОВАРА
+                            if selectedItem.stock < selectedQty then
+                                showMsg("ОШИБКА", "В наличии только " .. (selectedItem.stock or 0) .. " шт!", true)
+                            else
+                                table.insert(cart, {item = selectedItem, qty = selectedQty}); state = "shop"; refreshScreen()
+                            end
                         elseif action == "confirm_buy" then
                             local cost = selectedItem.price * selectedQty
                             if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
@@ -474,15 +478,20 @@ while true do
                                 if currentUser.balance < totalCost then showMsg("ОШИБКА", "Недостаточно средств!", true)
                                 else
                                     local all_ok, actual_total = true, 0
+                                    local receipt_str = ""
                                     for _, ci in ipairs(cart) do
                                         local ok, msg, actual_moved = me.buyItem(ci.item, ci.qty)
                                         if ok and actual_moved and actual_moved > 0 then
                                             actual_total = actual_total + (ci.item.price * actual_moved)
+                                            -- ИСПРАВЛЕНО: ПОЛНЫЙ СПИСОК ПРЕДМЕТОВ В ЛОГЕ КОРЗИНЫ
+                                            receipt_str = receipt_str .. ci.item.name .. "(x" .. actual_moved .. ") "
                                             if actual_moved < ci.qty then all_ok = false end
                                         else all_ok = false end
                                     end
                                     currentUser.balance = currentUser.balance - actual_total; cart = {}; saveUser(); saveShop()
-                                    writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, "Оплачена корзина на сумму " .. actual_total .. " ЭМ")
+                                    if receipt_str == "" then receipt_str = "ОШИБКА ВЫДАЧИ " end
+                                    writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, receipt_str .. "на сумму " .. actual_total .. " ЭМ")
+                                    
                                     if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false, 3)
                                     else showMsg("ВНИМАНИЕ", "Места не хватило. Выдано частично! Списано: " .. actual_total .. " ЭМ", true, 6) end
                                 end
