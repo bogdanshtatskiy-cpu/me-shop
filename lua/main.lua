@@ -12,6 +12,7 @@ local network = require("network")
 local json = require("json")
 
 local me_ok, me_msg = me.init()
+local CUR = config.currency_name or "ЭМ"
 
 local OWNER_NAME = "Администратор"
 if config.admins then for k, v in pairs(config.admins) do OWNER_NAME = k; break end end
@@ -40,6 +41,8 @@ local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
 local function getRealTime()
+    if not config.use_database then return os.date("%Y-%m-%d %H:%M:%S") .. " (Локальное)" end
+    
     local ok, res = pcall(function()
         local headers = { ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
         local handle = require("internet").request("https://timeapi.io/api/Time/current/zone?timeZone=Europe/Kyiv", nil, headers)
@@ -75,9 +78,11 @@ local function writeLog(action, user, details)
     local f = io.open("/home/shop_logs.txt", "a")
     if f then f:write(log_line .. "\n"); f:close() end
     
-    pcall(function() 
-        network.request("POST", "/logs", json.encode({ time = time_str, action = action, user = user, details = details })) 
-    end)
+    if config.use_database then
+        pcall(function() 
+            network.request("POST", "/logs", json.encode({ time = time_str, action = action, user = user, details = details })) 
+        end)
+    end
 end
 
 local function loadUsersLocal()
@@ -113,7 +118,10 @@ local function saveUser()
     
     local f = io.open("/home/users.json", "w")
     if f then f:write(json.encode(users_db)); f:close() end
-    pcall(function() network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end)
+    
+    if config.use_database then
+        pcall(function() network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end)
+    end
 end
 
 local function saveShop()
@@ -121,26 +129,34 @@ local function saveShop()
     local encoded = json.encode(data)
     local f = io.open("/home/shop_data.json", "w")
     if f then f:write(encoded); f:close() end
-    pcall(function() network.put("/shop", encoded) end)
+    
+    if config.use_database then
+        pcall(function() network.put("/shop", encoded) end)
+    end
 end
 
 local function loadDB()
-    local succ_shop, res_shop = network.get("/shop")
-    if succ_shop and res_shop and res_shop ~= "null" then
-        local parsed = json.decode(res_shop)
-        if parsed then
-            if parsed.categories then categories = parsed.categories end
-            if parsed.items then shop_items = parsed.items end
-            if parsed.buyback then shop_buyback = parsed.buyback end
-            if parsed.shop_name then shop_name = parsed.shop_name end
-        end
-    else loadShopLocal() end
-    
-    local succ_u, res_u = network.get("/users")
-    if succ_u and res_u and res_u ~= "null" then
-        local parsed_u = json.decode(res_u)
-        if parsed_u then users_db = parsed_u end
-    else loadUsersLocal() end
+    if config.use_database then
+        local succ_shop, res_shop = network.get("/shop")
+        if succ_shop and res_shop and res_shop ~= "null" then
+            local parsed = json.decode(res_shop)
+            if parsed then
+                if parsed.categories then categories = parsed.categories end
+                if parsed.items then shop_items = parsed.items end
+                if parsed.buyback then shop_buyback = parsed.buyback end
+                if parsed.shop_name then shop_name = parsed.shop_name end
+            end
+        else loadShopLocal() end
+        
+        local succ_u, res_u = network.get("/users")
+        if succ_u and res_u and res_u ~= "null" then
+            local parsed_u = json.decode(res_u)
+            if parsed_u then users_db = parsed_u end
+        else loadUsersLocal() end
+    else
+        loadShopLocal()
+        loadUsersLocal()
+    end
 end
 
 local function getTop3Players()
@@ -150,13 +166,6 @@ local function getTop3Players()
     local top3 = {}
     for i = 1, math.min(3, #sorted) do table.insert(top3, sorted[i]) end
     return top3
-end
-
-local function getFreeDBSlot()
-    local used = {}
-    for _, item in ipairs(shop_items) do if item.db_slot then used[item.db_slot] = true end end
-    for i = 1, 81 do if not used[i] then return i end end
-    return nil
 end
 
 local function getPageItems()
@@ -249,28 +258,30 @@ while true do
             local pItems, _ = getPageItems()
             gui.drawStockTick(pItems)
             
-            syncTimer = syncTimer - 1
-            if syncTimer <= 0 then
-                syncTimer = 15
-                local s, r = network.get("/shop")
-                if s and r and r ~= "null" then
-                    local p = json.decode(r)
-                    if p then
-                        if p.categories then categories = p.categories end
-                        if p.items then shop_items = p.items end
-                        if p.buyback then shop_buyback = p.buyback end
-                        if p.shop_name then shop_name = p.shop_name end
+            if config.use_database then
+                syncTimer = syncTimer - 1
+                if syncTimer <= 0 then
+                    syncTimer = 15
+                    local s, r = network.get("/shop")
+                    if s and r and r ~= "null" then
+                        local p = json.decode(r)
+                        if p then
+                            if p.categories then categories = p.categories end
+                            if p.items then shop_items = p.items end
+                            if p.buyback then shop_buyback = p.buyback end
+                            if p.shop_name then shop_name = p.shop_name end
+                        end
                     end
-                end
-                local su, ru = network.get("/users")
-                if su and ru and ru ~= "null" then
-                    local pu = json.decode(ru)
-                    if pu then users_db = pu end
-                    if currentUser and users_db[currentUser.name] then
-                        currentUser.balance = users_db[currentUser.name].balance
+                    local su, ru = network.get("/users")
+                    if su and ru and ru ~= "null" then
+                        local pu = json.decode(ru)
+                        if pu then users_db = pu end
+                        if currentUser and users_db[currentUser.name] then
+                            currentUser.balance = users_db[currentUser.name].balance
+                        end
                     end
+                    shouldRefreshFull = true
                 end
-                shouldRefreshFull = true
             end
         end
 
@@ -385,10 +396,10 @@ while true do
                                 else
                                     if ed_data.isItem then
                                         table.insert(shop_items, { name = ed_data.name, price = tonumber(p_str), category = ed_data.cat, stock = 0, id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name })
-                                        writeLog("ДОБАВЛЕН ТОВАР", currentUser.name, ed_data.name .. " за " .. p_str .. " ЭМ")
+                                        writeLog("ДОБАВЛЕН ТОВАР", currentUser.name, ed_data.name .. " за " .. p_str .. " " .. CUR)
                                     else
                                         table.insert(shop_buyback, { name = ed_data.name, price = tonumber(p_str), id = ed_data.orig_id, damage = ed_data.damage, orig_label = ed_data.orig_name })
-                                        writeLog("ДОБАВЛЕНА СКУПКА", currentUser.name, ed_data.name .. " по " .. p_str .. " ЭМ")
+                                        writeLog("ДОБАВЛЕНА СКУПКА", currentUser.name, ed_data.name .. " по " .. p_str .. " " .. CUR)
                                     end
                                     saveShop(); state = (ed_data.target == "item") and "admin_item" or "admin_buy"; refreshScreen()
                                 end
@@ -401,10 +412,12 @@ while true do
                             local bal = 0
                             if users_db[player_name] then bal = users_db[player_name].balance
                             else
-                                local succ, res = network.get("/users/" .. player_name)
-                                if succ and res and res ~= "null" then
-                                    local udata = json.decode(res)
-                                    if udata and udata.balance then bal = udata.balance end
+                                if config.use_database then
+                                    local succ, res = network.get("/users/" .. player_name)
+                                    if succ and res and res ~= "null" then
+                                        local udata = json.decode(res)
+                                        if udata and udata.balance then bal = udata.balance end
+                                    end
                                 end
                             end
                             currentUser = { name = player_name, balance = bal, isAdmin = is_adm }; idleTimer = 30; refreshScreen()
@@ -418,8 +431,8 @@ while true do
                                 local success, msg, earned = me.sellAll(shop_buyback)
                                 if success then 
                                     currentUser.balance = currentUser.balance + earned; saveUser()
-                                    writeLog("ПРОДАЖА", currentUser.name, msg .. " Начислено: " .. earned .. " ЭМ")
-                                    showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " ЭМ", false, 3)
+                                    writeLog("ПРОДАЖА", currentUser.name, msg .. " Начислено: " .. earned .. " " .. CUR)
+                                    showMsg("УСПЕШНАЯ СДАЧА", msg .. " Зачислено: " .. earned .. " " .. CUR, false, 3)
                                 else showMsg("ОШИБКА", msg, true) end
                             end
                             
@@ -443,7 +456,6 @@ while true do
                         elseif action == "qty_add1000" then selectedQty = selectedQty + 1000
                         elseif action == "qty_sub1000" then selectedQty = selectedQty - 1000
                         elseif action == "confirm_cart" then 
-                            -- ИСПРАВЛЕНО: ЗАЩИТА ОТ ДОБАВЛЕНИЯ В КОРЗИНУ ПРИ НЕХВАТКЕ ТОВАРА
                             if selectedItem.stock < selectedQty then
                                 showMsg("ОШИБКА", "В наличии только " .. (selectedItem.stock or 0) .. " шт!", true)
                             else
@@ -452,15 +464,15 @@ while true do
                         elseif action == "confirm_buy" then
                             local cost = selectedItem.price * selectedQty
                             if selectedItem.stock < selectedQty then showMsg("ОШИБКА", "Не хватает товара в МЭ!", true)
-                            elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало ЭМ!", true)
+                            elseif currentUser.balance < cost then showMsg("ОШИБКА", "Мало " .. CUR .. "!", true)
                             else
                                 local ok, msg, actual_moved = me.buyItem(selectedItem, selectedQty)
                                 if ok and actual_moved and actual_moved > 0 then
                                     local actual_cost = selectedItem.price * actual_moved
                                     currentUser.balance = currentUser.balance - actual_cost; saveUser(); saveShop()
-                                    writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. actual_moved .. " за " .. actual_cost .. " ЭМ")
-                                    if actual_moved < selectedQty then showMsg("ВНИМАНИЕ", "Сундук полон! Выдано " .. actual_moved .. " шт. Списано: " .. actual_cost .. " ЭМ", true, 6)
-                                    else showMsg("УСПЕХ", "Выдано " .. actual_moved .. " шт. за " .. actual_cost .. " ЭМ", false, 3) end
+                                    writeLog("ПОКУПКА", currentUser.name, "Куплено: " .. selectedItem.name .. " x" .. actual_moved .. " за " .. actual_cost .. " " .. CUR)
+                                    if actual_moved < selectedQty then showMsg("ВНИМАНИЕ", "Сундук полон! Выдано " .. actual_moved .. " шт. Списано: " .. actual_cost .. " " .. CUR, true, 6)
+                                    else showMsg("УСПЕХ", "Выдано " .. actual_moved .. " шт. за " .. actual_cost .. " " .. CUR, false, 3) end
                                 else showMsg("ОШИБКА ВЫДАЧИ", msg, true) end
                             end
                         end
@@ -483,17 +495,16 @@ while true do
                                         local ok, msg, actual_moved = me.buyItem(ci.item, ci.qty)
                                         if ok and actual_moved and actual_moved > 0 then
                                             actual_total = actual_total + (ci.item.price * actual_moved)
-                                            -- ИСПРАВЛЕНО: ПОЛНЫЙ СПИСОК ПРЕДМЕТОВ В ЛОГЕ КОРЗИНЫ
                                             receipt_str = receipt_str .. ci.item.name .. "(x" .. actual_moved .. ") "
                                             if actual_moved < ci.qty then all_ok = false end
                                         else all_ok = false end
                                     end
                                     currentUser.balance = currentUser.balance - actual_total; cart = {}; saveUser(); saveShop()
                                     if receipt_str == "" then receipt_str = "ОШИБКА ВЫДАЧИ " end
-                                    writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, receipt_str .. "на сумму " .. actual_total .. " ЭМ")
+                                    writeLog("ПОКУПКА (КОРЗИНА)", currentUser.name, receipt_str .. "на сумму " .. actual_total .. " " .. CUR)
                                     
                                     if all_ok then showMsg("ОПЛАТА", "Покупки успешно выданы!", false, 3)
-                                    else showMsg("ВНИМАНИЕ", "Места не хватило. Выдано частично! Списано: " .. actual_total .. " ЭМ", true, 6) end
+                                    else showMsg("ВНИМАНИЕ", "Места не хватило. Выдано частично! Списано: " .. actual_total .. " " .. CUR, true, 6) end
                                 end
                             end
                         end
