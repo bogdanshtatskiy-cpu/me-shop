@@ -84,41 +84,62 @@ function me.peekInput()
     return nil, nil, "Положите предмет в сундук!"
 end
 
-function me.storeToDB(chest_slot, db_slot)
-    return true -- Оставил заглушку, чтобы main.lua не ругался при добавлении товара. БД нам больше не нужна.
-end
+function me.storeToDB(chest_slot, db_slot) return true end
 
--- === ИДЕАЛЬНАЯ И ПРОСТАЯ ВЫДАЧА (ПРОБИВАЕМ БАГ МОДА) ===
+-- === ВЫДАЧА С ЦИКЛОМ (Обходит лимит в 64 штуки) ===
 function me.buyItem(item, qty)
-    -- ВОТ ОНО! Формируем слепок именно с "dmg", как того требует кривой AE2
     local perfect_fingerprint = {
         id = item.id,
         dmg = math.floor(item.damage or 0)
     }
     
-    local success = false
+    local total_moved = 0
     local last_err = "Сундук выдачи не найден ни над одним интерфейсом!"
 
-    -- Опрашиваем все интерфейсы, пока один из них не выплюнет доски в сундук
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
         for side = 0, 5 do
-            local ok, result, reason = pcall(function()
-                return me_proxy.exportItem(perfect_fingerprint, side, qty)
-            end)
+            -- Первая попытка: находим правильную сторону
+            local ok, result = pcall(me_proxy.exportItem, perfect_fingerprint, side, qty)
+            local moved_now = 0
             
-            if ok and (result == true or (type(result) == "table" and result.size and result.size > 0) or (type(result) == "number" and result > 0)) then
-                success = true
-                break
+            if ok and type(result) == "table" and result.size then moved_now = result.size
+            elseif ok and type(result) == "number" then moved_now = result end
+            
+            if moved_now > 0 then
+                total_moved = total_moved + moved_now
+                
+                -- Сторона найдена! Начинаем цикл-насос для остатка
+                local attempts = 0
+                while total_moved < qty and attempts < 150 do
+                    local batch = qty - total_moved
+                    local ok2, res2 = pcall(me_proxy.exportItem, perfect_fingerprint, side, batch)
+                    local m2 = 0
+                    
+                    if ok2 and type(res2) == "table" and res2.size then m2 = res2.size
+                    elseif ok2 and type(res2) == "number" then m2 = res2 end
+                    
+                    if m2 > 0 then
+                        total_moved = total_moved + m2
+                    else
+                        break -- Остановка: сундук полон или ресурсы в МЭ кончились
+                    end
+                    attempts = attempts + 1
+                end
+                
+                return true, "Успешно", total_moved
             elseif not ok then
                 last_err = tostring(result)
             end
         end
-        if success then break end
+        if total_moved > 0 then break end
     end
     
-    if success then return true, "Выдано"
-    else return false, "Ошибка мода: " .. last_err end
+    if total_moved > 0 then 
+        return true, "Частично", total_moved
+    else 
+        return false, "Ошибка мода: " .. last_err, 0 
+    end
 end
 
 return me
