@@ -25,4 +25,4 @@
 
 ## 🚀 Установка
 
-Подробная инструкция по настройке базы данных Firebase, веб-панели и постройке структуры из сундуков находится в [полном руководстве ([ССЫЛКА НА ФОРУМ](https://htcbook.ru/books/open-computers/page/magazin-v-kompiutere-s-bd-i-upravleniem-s-telefona))].
+Подробная инструкция по настройке базы данных Firebase, веб-панели и постройке структуры из сундуков находится в полном руководстве ([ССЫЛКА НА ФОРУМ](https://htcbook.ru/books/open-computers/page/magazin-v-kompiutere-s-bd-i-upravleniem-s-telefona)).
