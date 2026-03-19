@@ -72,13 +72,11 @@ local function getRealTime()
         file:write("")
         file:close()
         
-        -- fs.lastModified возвращает время в миллисекундах. Делим на 1000, чтобы получить секунды.
         local lastModifiedMs = fs.lastModified(tmp_file)
         fs.remove(tmp_file)
         
         if lastModifiedMs and lastModifiedMs > 0 then
             local current_unix = math.floor(lastModifiedMs / 1000)
-            -- Пропускаем через наш календарь, чтобы избежать багов os.date
             return formatUnixTime(current_unix + (tz * 3600))
         end
     end
@@ -256,7 +254,7 @@ local function refreshScreen()
         elseif state == "admin_buy" then listToPass = shop_buyback
         elseif state == "admin_logs" then 
             listToPass = loadLogsLocal(log_filter)
-            perPage = 34
+            perPage = 15 -- Уменьшили, так как один лог может занимать 2-3 строки
         end
         
         local pItems, maxP = getAdminPageItems(listToPass, perPage)
