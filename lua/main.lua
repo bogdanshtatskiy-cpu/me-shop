@@ -35,39 +35,37 @@ local ed_data = {}
 
 local currentPage = 1
 local ITEMS_PER_PAGE = 20
-
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
--- === УМНОЕ ПОЛУЧЕНИЕ РЕАЛЬНОГО ВРЕМЕНИ ===
+-- === ПРОБИВАЕМ БЛОКИРОВКУ ВРЕМЕНИ ===
 local function getRealTime()
     local ok, res = pcall(function()
-        local handle = require("internet").request("http://worldtimeapi.org/api/timezone/Europe/Kyiv")
+        -- Надеваем маску обычного браузера, чтобы сервер времени нас не заблокировал
+        local headers = { ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+        -- Запрашиваем время Киева в простом текстовом формате (.txt)
+        local handle = require("internet").request("http://worldtimeapi.org/api/timezone/Europe/Kiev.txt", nil, headers)
         local data = ""
         for chunk in handle do data = data .. chunk end
         return data
     end)
     
     if ok and res and res ~= "" then
-        local p_ok, parsed = pcall(json.decode, res)
-        if p_ok and parsed and parsed.datetime then
-            -- Вытаскиваем "2026-03-19" и "04:14:50" из длинной строки формата ISO
-            return string.sub(parsed.datetime, 1, 10) .. " " .. string.sub(parsed.datetime, 12, 19)
-        end
+        -- Вырезаем дату и время прямо из текста
+        local d, t = string.match(res, "datetime: (%d%d%d%d%-%d%d%-%d%d)T(%d%d:%d%d:%d%d)")
+        if d and t then return d .. " " .. t end
     end
-    -- Страховка: если апи лежит, возвращаем майнкрафтовское
-    return os.date("%Y-%m-%d %H:%M:%S")
+    -- Страховка с пометкой, если сервер времени упал
+    return os.date("%Y-%m-%d %H:%M:%S") .. " (Игровое)"
 end
 
 local function writeLog(action, user, details)
     local time_str = getRealTime()
     local log_line = string.format("[%s] %s | %s | %s", time_str, action, user, details)
     
-    -- Пишем в локальный лог
     local f = io.open("/home/shop_logs.txt", "a")
     if f then f:write(log_line .. "\n"); f:close() end
     
-    -- Отправляем в Firebase (используем POST для создания уникальной записи)
     pcall(function() 
         network.request("POST", "/logs", json.encode({ 
             time = time_str, 
