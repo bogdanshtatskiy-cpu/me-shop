@@ -167,17 +167,26 @@
         }
 
         function loadData() {
-            // 1. ПОЛЬЗОВАТЕЛИ
+            // 1. БРОНЕБОЙНАЯ ЗАГРУЗКА ПОЛЬЗОВАТЕЛЕЙ
             db.ref('users').on('value', (snapshot) => {
                 const users = snapshot.val() || {};
                 const tbody = document.getElementById('users-table');
                 tbody.innerHTML = '';
-                for (const [name, data] of Object.entries(users)) {
+                
+                for (const [name, rawData] of Object.entries(users)) {
+                    let data = rawData;
+                    // Если OC сохранил данные как строку - расшифровываем на лету
+                    if (typeof rawData === 'string') {
+                        try { data = JSON.parse(rawData); } catch(e) { data = { balance: 0 }; }
+                    }
+                    
+                    const balance = data.balance !== undefined ? data.balance : 0;
+                    
                     tbody.innerHTML += `
                         <tr>
                             <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-white">${name}</td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <input type="number" id="bal-${name}" value="${data.balance}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-24">
+                                <input type="number" id="bal-${name}" value="${balance}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-24">
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <button onclick="saveBalance('${name}')" class="text-green-400 hover:text-green-300 font-bold">✔ СОХРАНИТЬ</button>
@@ -187,13 +196,19 @@
                 }
             });
 
-            // 2. ТОВАРЫ (ИСПРАВЛЕНО ЧТЕНИЕ МАССИВОВ/ОБЪЕКТОВ)
-            db.ref('shop/items').on('value', (snapshot) => {
-                const itemsRaw = snapshot.val() || {};
+            // 2. БРОНЕБОЙНАЯ ЗАГРУЗКА ТОВАРОВ
+            db.ref('shop').on('value', (snapshot) => {
+                let shopData = snapshot.val() || {};
+                
+                // Если весь магазин сохранился как одна строка
+                if (typeof shopData === 'string') {
+                    try { shopData = JSON.parse(shopData); } catch(e) { shopData = {}; }
+                }
+                
+                const itemsRaw = shopData.items || [];
                 const tbody = document.getElementById('shop-table');
                 tbody.innerHTML = '';
                 
-                // Object.keys работает одинаково хорошо и с массивами, и с объектами
                 Object.keys(itemsRaw).forEach(key => {
                     const item = itemsRaw[key];
                     if(!item) return;
@@ -217,14 +232,25 @@
                 });
             });
 
-            // 3. ЛОГИ
+            // 3. БРОНЕБОЙНАЯ ЗАГРУЗКА ЛОГОВ
             db.ref('logs').orderByKey().limitToLast(50).on('value', (snapshot) => {
                 const logsRaw = snapshot.val() || {};
                 const tbody = document.getElementById('logs-table');
                 tbody.innerHTML = '';
-                const logs = Object.values(logsRaw).reverse();
                 
-                logs.forEach(log => {
+                const logsArray = [];
+                for (const key in logsRaw) {
+                    let log = logsRaw[key];
+                    if (typeof log === 'string') {
+                        try { log = JSON.parse(log); } catch(e) { continue; }
+                    }
+                    logsArray.push(log);
+                }
+                
+                // Сортируем от новых к старым
+                logsArray.reverse();
+                
+                logsArray.forEach(log => {
                     let actionColor = "text-gray-300";
                     if(log.action.includes("ПОКУПКА")) actionColor = "text-green-400";
                     if(log.action.includes("ПРОДАЖА") || log.action.includes("СКУПКА")) actionColor = "text-yellow-400";
@@ -253,9 +279,25 @@
             const name = document.getElementById(`name-${key}`).value;
             const cat = document.getElementById(`cat-${key}`).value;
             const price = document.getElementById(`price-${key}`).value;
-            db.ref(`shop/items/${key}`).update({ name: name, category: cat, price: Number(price) })
-              .then(() => alert('Товар обновлен!'))
-              .catch(e => alert('Ошибка доступа! Проверьте авторизацию.'));
+            
+            // Запрашиваем весь магазин, меняем нужный товар и отправляем обратно, 
+            // чтобы структура базы гарантированно не сломалась
+            db.ref('shop').once('value').then((snapshot) => {
+                let shopData = snapshot.val() || {};
+                if (typeof shopData === 'string') {
+                    try { shopData = JSON.parse(shopData); } catch(e) { shopData = { items: [] }; }
+                }
+                
+                if (shopData.items && shopData.items[key]) {
+                    shopData.items[key].name = name;
+                    shopData.items[key].category = cat;
+                    shopData.items[key].price = Number(price);
+                    
+                    db.ref('shop').set(shopData)
+                      .then(() => alert('Товар обновлен!'))
+                      .catch(e => alert('Ошибка сохранения!'));
+                }
+            });
         }
     </script>
 </body>
