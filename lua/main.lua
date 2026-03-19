@@ -61,35 +61,14 @@ local function formatUnixTime(unix)
     return string.format("%04d-%02d-%02d %02d:%02d:%02d", y, m, d, h, min, s)
 end
 
--- === УМНАЯ СИНХРОНИЗАЦИЯ ВРЕМЕНИ (Без зависаний) ===
-local time_offset = nil
-local time_sync_timer = 0
-
-local function syncTime()
-    if not component.isAvailable("internet") then return false end
-    local ok, res = pcall(function()
-        local headers = { ["User-Agent"] = "Mozilla/5.0" }
-        local handle = require("internet").request("http://worldtimeapi.org/api/timezone/Etc/UTC.txt", nil, headers)
-        local data = ""
-        for chunk in handle do data = data .. chunk end
-        return data
-    end)
-    if ok and res and res ~= "" then
-        local unixtime = res:match("unixtime: (%d+)")
-        if unixtime then
-            -- Запоминаем разницу между реальным миром и аптаймом компьютера
-            time_offset = tonumber(unixtime) - computer.uptime()
-            return true
-        end
-    end
-    return false
-end
-
+-- === ВРЕМЯ НАПРЯМУЮ С ЖЕЛЕЗА ХОСТИНГА (ИДЕАЛЬНЫЙ ВАРИАНТ) ===
 local function getRealTime()
-    if time_offset then
-        local tz = tonumber(config.timezone) or 0
-        local current_unix = math.floor(computer.uptime() + time_offset + (tz * 3600))
-        return formatUnixTime(current_unix)
+    local tz = tonumber(config.timezone) or 0
+    
+    if os.realtime then
+        -- os.realtime() берет системное время (UTC) физического сервера в секундах
+        local current_unix = math.floor(os.realtime())
+        return formatUnixTime(current_unix + (tz * 3600))
     else
         return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
     end
@@ -284,7 +263,6 @@ local function showMsg(title, text, isError, timeout)
 end
 
 -- Инициализация
-syncTime()
 loadDB()
 refreshScreen()
 
@@ -306,15 +284,6 @@ while true do
                 shouldRefreshFull = true
             else
                 if state == "shop" or state == "modal_qty" or state == "cart" then gui.drawTick(currentUser, idleTimer) end
-            end
-        end
-        
-        -- Фоновая синхронизация времени, если при старте не получилось
-        if not time_offset then
-            time_sync_timer = time_sync_timer - 1
-            if time_sync_timer <= 0 then
-                time_sync_timer = 30
-                pcall(syncTime)
             end
         end
 
