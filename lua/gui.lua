@@ -34,7 +34,7 @@ end
 function gui.drawStatic(user, timer, cart_count)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, rightColX - 1, 3, gui.COLORS.panel)
-    center(1, 2, rightColX - 1, "МЭ МАГАЗИН v4.1", gui.COLORS.energy, gui.COLORS.panel)
+    center(1, 2, rightColX - 1, "МЭ МАГАЗИН v4.2", gui.COLORS.energy, gui.COLORS.panel)
 
     rect(rightColX, 1, rightColW, H, gui.COLORS.panel)
     local userBoxY = 1
@@ -85,6 +85,25 @@ function gui.drawItems(items)
         col = col + 1; if col >= cols then col = 0; row = row + 1 end
     end
 end
+
+-- === НОВЫЕ ФУНКЦИИ ДЛЯ ОБНОВЛЕНИЯ БЕЗ МЕРЦАНИЯ ===
+function gui.drawTick(user, timer)
+    if user and timer then
+        center(rightColX, 9, rightColW, "Выход через: " .. timer .. "с   ", gui.COLORS.label, gui.COLORS.panel)
+    end
+end
+
+function gui.drawStockTick(items)
+    local margin = 2; local cols = 3; local tileW = math.floor((rightColX - (cols + 1) * margin) / cols); local tileH = 6
+    local row, col = 0, 0
+    for i, item in ipairs(items) do
+        local x = margin + col * (tileW + margin); local y = 7 + row * (tileH + margin)
+        local stockCol = (item.stock and item.stock > 0) and gui.COLORS.label or gui.COLORS.bad
+        text(x + 2, y + 3, "В МЭ: " .. (item.stock or 0) .. " шт      ", stockCol, gui.COLORS.tileBg)
+        col = col + 1; if col >= cols then col = 0; row = row + 1 end
+    end
+end
+-- =================================================
 
 function gui.drawBuybackItems(buyback_items, isUserLogged)
     local startY = isUserLogged and 18 or 15
@@ -141,7 +160,6 @@ function gui.drawCart(cart_items)
     end
     rect(x, y + h - 4, w, 1, gui.COLORS.tileHeader)
     
-    -- === ТУТ ИСПРАВЛЕНА ОШИБКА НАЛОЖЕНИЯ ===
     gui.btn("close_modal", x + 2, y + h - 3, 12, 3, "НАЗАД", gui.COLORS.btn)
     text(x + 16, y + h - 2, "ИТОГО: " .. totalCost .. " ЭМ", gui.COLORS.warn, gui.COLORS.panel)
     gui.btn("checkout", x + w - 20, y + h - 3, 18, 3, "ОПЛАТИТЬ", gui.COLORS.good)
