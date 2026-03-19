@@ -3,11 +3,13 @@ local internet = require("internet")
 
 local net = {}
 
--- ВСТАВЬ СЮДА ССЫЛКУ НА СВОЙ FIREBASE (БЕЗ СЛЕША НА КОНЦЕ)
-net.FIREBASE_URL = "https://me-shop-db-f7542-default-rtdb.europe-west1.firebasedatabase.app/"
+net.FIREBASE_URL = "https://me-shop-db-f7542-default-rtdb.europe-west1.firebasedatabase.app"
+-- ВСТАВЬ СВОЙ СЕКРЕТНЫЙ КЛЮЧ ИЗ ШАГА 3
+net.SECRET = "ТВОЙ_ДЛИННЫЙ_СЕКРЕТНЫЙ_КЛЮЧ"
 
 function net.request(method, path, data)
-    local url = net.FIREBASE_URL .. path .. ".json"
+    -- Теперь мы добавляем ?auth=СЕКРЕТ к каждому URL
+    local url = net.FIREBASE_URL .. path .. ".json?auth=" .. net.SECRET
     local headers = {}
     if data then headers["Content-Type"] = "application/json" end
     
@@ -18,11 +20,7 @@ function net.request(method, path, data)
         return result
     end)
     
-    if success then 
-        return true, response 
-    else 
-        return false, "Ошибка сети" 
-    end
+    if success then return true, response else return false, "Ошибка сети" end
 end
 
 function net.get(path) return net.request("GET", path) end
