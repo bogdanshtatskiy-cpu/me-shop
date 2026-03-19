@@ -113,7 +113,6 @@
     </div>
 
     <script>
-        // Конфигурация, которую ты предоставил
         const firebaseConfig = {
             apiKey: "AIzaSyD3JArVjGMjAhld1IvGnsEdT4cJqpyK0ok",
             authDomain: "me-shop-db-f7542.firebaseapp.com",
@@ -124,25 +123,22 @@
             appId: "1:258368560679:web:ab64e53192d07835a9b802"
         };
 
-        // Инициализация Firebase
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.database();
 
-        // Управление видимостью экранов на основе статуса авторизации
         auth.onAuthStateChanged((user) => {
             if (user) {
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
                 document.getElementById('user-email').innerText = user.email;
-                loadData(); // Загружаем данные только после успешного входа
+                loadData(); 
             } else {
                 document.getElementById('login-screen').classList.remove('hidden');
                 document.getElementById('dashboard').classList.add('hidden');
             }
         });
 
-        // Вход в систему
         document.getElementById('login-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
@@ -154,12 +150,8 @@
                 });
         });
 
-        // Выход
-        function logout() {
-            auth.signOut();
-        }
+        function logout() { auth.signOut(); }
 
-        // Управление вкладками
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.tab-btn').forEach(el => {
@@ -174,9 +166,8 @@
             }
         }
 
-        // Загрузка данных из БД
         function loadData() {
-            // Балансы пользователей
+            // 1. ПОЛЬЗОВАТЕЛИ
             db.ref('users').on('value', (snapshot) => {
                 const users = snapshot.val() || {};
                 const tbody = document.getElementById('users-table');
@@ -189,40 +180,44 @@
                                 <input type="number" id="bal-${name}" value="${data.balance}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-24">
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <button onclick="saveBalance('${name}')" class="text-green-400 hover:text-green-300 font-bold">✔</button>
+                                <button onclick="saveBalance('${name}')" class="text-green-400 hover:text-green-300 font-bold">✔ СОХРАНИТЬ</button>
                             </td>
                         </tr>
                     `;
                 }
             });
 
-            // Товары магазина
+            // 2. ТОВАРЫ (ИСПРАВЛЕНО ЧТЕНИЕ МАССИВОВ/ОБЪЕКТОВ)
             db.ref('shop/items').on('value', (snapshot) => {
-                const items = snapshot.val() || [];
+                const itemsRaw = snapshot.val() || {};
                 const tbody = document.getElementById('shop-table');
                 tbody.innerHTML = '';
-                items.forEach((item, index) => {
+                
+                // Object.keys работает одинаково хорошо и с массивами, и с объектами
+                Object.keys(itemsRaw).forEach(key => {
+                    const item = itemsRaw[key];
                     if(!item) return;
+                    
                     tbody.innerHTML += `
                         <tr>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <input type="text" id="name-${index}" value="${item.name}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-full md:w-48">
+                                <input type="text" id="name-${key}" value="${item.name}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-full md:w-48">
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <input type="text" id="cat-${index}" value="${item.category}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-24 md:w-32">
+                                <input type="text" id="cat-${key}" value="${item.category}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-24 md:w-32">
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <input type="number" id="price-${index}" value="${item.price}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-20">
+                                <input type="number" id="price-${key}" value="${item.price}" class="bg-gray-700 text-white px-2 py-1 rounded border border-gray-600 w-20">
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <button onclick="saveItem(${index})" class="text-blue-400 hover:text-blue-300 font-bold">✔</button>
+                                <button onclick="saveItem('${key}')" class="text-blue-400 hover:text-blue-300 font-bold">✔ СОХРАНИТЬ</button>
                             </td>
                         </tr>
                     `;
                 });
             });
 
-            // Логи (последние 50)
+            // 3. ЛОГИ
             db.ref('logs').orderByKey().limitToLast(50).on('value', (snapshot) => {
                 const logsRaw = snapshot.val() || {};
                 const tbody = document.getElementById('logs-table');
@@ -247,21 +242,20 @@
             });
         }
 
-        // Функции сохранения в БД
         window.saveBalance = function(name) {
             const newBal = document.getElementById(`bal-${name}`).value;
             db.ref(`users/${name}/balance`).set(Number(newBal))
               .then(() => alert('Баланс обновлен!'))
-              .catch(e => alert('Ошибка доступа!'));
+              .catch(e => alert('Ошибка доступа! Проверьте авторизацию.'));
         }
 
-        window.saveItem = function(index) {
-            const name = document.getElementById(`name-${index}`).value;
-            const cat = document.getElementById(`cat-${index}`).value;
-            const price = document.getElementById(`price-${index}`).value;
-            db.ref(`shop/items/${index}`).update({ name: name, category: cat, price: Number(price) })
+        window.saveItem = function(key) {
+            const name = document.getElementById(`name-${key}`).value;
+            const cat = document.getElementById(`cat-${key}`).value;
+            const price = document.getElementById(`price-${key}`).value;
+            db.ref(`shop/items/${key}`).update({ name: name, category: cat, price: Number(price) })
               .then(() => alert('Товар обновлен!'))
-              .catch(e => alert('Ошибка доступа!'));
+              .catch(e => alert('Ошибка доступа! Проверьте авторизацию.'));
         }
     </script>
 </body>
