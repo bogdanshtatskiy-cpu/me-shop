@@ -41,33 +41,55 @@ local ITEMS_PER_PAGE = 20
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
--- === МАГИЯ РЕАЛЬНОГО ВРЕМЕНИ БЕЗ ЛАГОВ ===
+-- === КАСТОМНЫЙ КАЛЕНДАРЬ (Игнорируем бешеный календарь Майнкрафта) ===
+local function formatUnixTime(unix)
+    local z = math.floor(unix / 86400) + 719468
+    local era = math.floor((z >= 0 and z or (z - 146096)) / 146097)
+    local doe = z - era * 146097
+    local yoe = math.floor((doe - doe / 1460 + doe / 36524 - doe / 146096) / 365)
+    local y = yoe + era * 400
+    local doy = doe - math.floor((365 * yoe + math.floor(yoe / 4) - math.floor(yoe / 100)))
+    local mp = math.floor((5 * doy + 2) / 153)
+    local d = doy - math.floor((153 * mp + 2) / 5) + 1
+    local m = mp + (mp < 10 and 3 or -9)
+    y = y + (m <= 2 and 1 or 0)
+    
+    local h = math.floor((unix % 86400) / 3600)
+    local min = math.floor((unix % 3600) / 60)
+    local s = math.floor(unix % 60)
+    
+    return string.format("%04d-%02d-%02d %02d:%02d:%02d", y, m, d, h, min, s)
+end
+
+-- === УМНАЯ СИНХРОНИЗАЦИЯ ВРЕМЕНИ (Без зависаний) ===
 local time_offset = nil
+local time_sync_timer = 0
 
 local function syncTime()
-    if not component.isAvailable("internet") then return end
+    if not component.isAvailable("internet") then return false end
     local ok, res = pcall(function()
-        -- Используем простой HTTP, чтобы избежать проблем с SSL в OC
-        local handle = require("internet").request("http://worldtimeapi.org/api/timezone/Etc/UTC")
+        local headers = { ["User-Agent"] = "Mozilla/5.0" }
+        local handle = require("internet").request("http://worldtimeapi.org/api/timezone/Etc/UTC.txt", nil, headers)
         local data = ""
         for chunk in handle do data = data .. chunk end
         return data
     end)
     if ok and res and res ~= "" then
-        local unixtime = res:match('"unixtime":(%d+)')
+        local unixtime = res:match("unixtime: (%d+)")
         if unixtime then
-            -- Запоминаем разницу между реальным миром и счетчиком компьютера
+            -- Запоминаем разницу между реальным миром и аптаймом компьютера
             time_offset = tonumber(unixtime) - computer.uptime()
+            return true
         end
     end
+    return false
 end
 
 local function getRealTime()
     if time_offset then
         local tz = tonumber(config.timezone) or 0
-        -- Вычисляем текущее точное время, даже если интернет пропал
-        local current_unix = computer.uptime() + time_offset + (tz * 3600)
-        return os.date("!%Y-%m-%d %H:%M:%S", current_unix)
+        local current_unix = math.floor(computer.uptime() + time_offset + (tz * 3600))
+        return formatUnixTime(current_unix)
     else
         return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
     end
@@ -286,6 +308,15 @@ while true do
                 if state == "shop" or state == "modal_qty" or state == "cart" then gui.drawTick(currentUser, idleTimer) end
             end
         end
+        
+        -- Фоновая синхронизация времени, если при старте не получилось
+        if not time_offset then
+            time_sync_timer = time_sync_timer - 1
+            if time_sync_timer <= 0 then
+                time_sync_timer = 30
+                pcall(syncTime)
+            end
+        end
 
         if state == "shop" and not shouldRefreshFull then
             if config.use_database and component.isAvailable("internet") then
@@ -365,7 +396,6 @@ while true do
                     elseif action == "close_admin" then state = "shop"; refreshScreen()
                     elseif action == "open_cart" then state = "cart"; refreshScreen()
                     
-                    -- Действия фильтра логов
                     elseif action == "filter_logs" then
                         ed_data = {target = "log_filter", focus = "name", name = log_filter, isItem = false}
                         state = "editor"; refreshScreen()
