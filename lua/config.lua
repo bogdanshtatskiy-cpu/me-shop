@@ -22,7 +22,7 @@ config.use_database = true
 
 -- Администраторы (кому доступна скрытая панель)
 config.admins = {
-    ["DesOope"] = true
+    ["DesOope"] = true,
     ["ник"] = true
 }
 
