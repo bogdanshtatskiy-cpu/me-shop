@@ -16,6 +16,7 @@ local trades = {}
 local state = "main"
 local ed_data = {}
 local adminPage = 1
+local adminMaxPage = 1
 local isAdminMode = false
 
 local function formatUnixTime(unix)
@@ -50,12 +51,6 @@ local function getRealTime()
     return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
 end
 
-local function writeLog(action, details)
-    local log_line = string.format("[%s] %s | %s", getRealTime(), action, details)
-    local f = io.open("/home/obmen_logs.txt", "a")
-    if f then f:write(log_line .. "\n"); f:close() end
-end
-
 local function loadLogsLocal()
     local logs = {}
     local f = io.open("/home/obmen_logs.txt", "r")
@@ -67,6 +62,23 @@ local function loadLogsLocal()
     local start = math.max(1, #logs - 150)
     for i = #logs, start, -1 do table.insert(res, logs[i]) end
     return res
+end
+
+local function writeLog(action, details)
+    local log_line = string.format("[%s] %s | %s", getRealTime(), action, details)
+    local f = io.open("/home/obmen_logs.txt", "a")
+    if f then f:write(log_line .. "\n"); f:close() end
+    
+    -- УМНАЯ АВТООЧИСТКА: Если файл больше 50КБ, оставляем только последние 150 логов
+    local size = fs.size("/home/obmen_logs.txt")
+    if size and size > 50000 then
+        local logs = loadLogsLocal()
+        local fw = io.open("/home/obmen_logs.txt", "w")
+        if fw then
+            for i = #logs, 1, -1 do fw:write(logs[i] .. "\n") end
+            fw:close()
+        end
+    end
 end
 
 local function loadTrades()
@@ -84,13 +96,21 @@ local function saveTrades()
 end
 
 local function refreshScreen()
-    if state == "main" then gui.drawMain(trades)
+    if state == "main" then 
+        gui.drawMain(trades)
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
         local list = (state == "admin_trades") and trades or loadLogsLocal()
-        local maxPage = math.ceil(#list / 17); if maxPage < 1 then maxPage = 1 end
+        
+        -- УМНАЯ ПАГИНАЦИЯ: Для логов 35 строк, для обменов 8 блоков
+        local isLogs = (state == "admin_logs")
+        local perPage = isLogs and 35 or 8
+        
+        local maxPage = math.ceil(#list / perPage); if maxPage < 1 then maxPage = 1 end
+        adminMaxPage = maxPage
         if adminPage > maxPage then adminPage = maxPage end
+        
         local pItems = {}
-        for i = (adminPage - 1) * 17 + 1, math.min(adminPage * 17, #list) do
+        for i = (adminPage - 1) * perPage + 1, math.min(adminPage * perPage, #list) do
             table.insert(pItems, {item = list[i], origIdx = (state == "admin_trades" and i or nil)})
         end
         gui.drawAdmin(state:gsub("admin_", ""), pItems, adminPage, maxPage)
@@ -158,6 +178,12 @@ while true do
                 elseif action == "adm_trades" then state = "admin_trades"; adminPage = 1; refreshScreen()
                 elseif action == "adm_logs" then state = "admin_logs"; adminPage = 1; refreshScreen()
                 
+                -- ИСПРАВЛЕННЫЕ КНОПКИ ПАГИНАЦИИ
+                elseif action == "adm_prev" then
+                    if adminPage > 1 then adminPage = adminPage - 1; refreshScreen() end
+                elseif action == "adm_next" then
+                    if adminPage < adminMaxPage then adminPage = adminPage + 1; refreshScreen() end
+                
                 elseif action == "adm_add" then
                     ed_data = {title="СКАНИРОВАНИЕ", msg="Положите руду в ЛЕВЫЙ сундук, а слиток - в ПРАВЫЙ", err=false}
                     state = "admin_wait_scan"; refreshScreen()
@@ -207,7 +233,7 @@ while true do
             local dir = arg4
             if string.match(state, "admin") then
                 if dir > 0 and adminPage > 1 then adminPage = adminPage - 1; refreshScreen()
-                elseif dir < 0 then adminPage = adminPage + 1; refreshScreen() end
+                elseif dir < 0 and adminPage < adminMaxPage then adminPage = adminPage + 1; refreshScreen() end
             end
         end
     end
