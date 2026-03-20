@@ -4,6 +4,10 @@ local term = require("term")
 local unicode = require("unicode")
 local gpu = component.gpu
 
+-- АВТОМАТИЧЕСКИ ВКЛЮЧАЕМ МАКСИМАЛЬНОЕ РАЗРЕШЕНИЕ ДЛЯ ТВОЕГО ЭКРАНА!
+local maxW, maxH = gpu.maxResolution()
+gpu.setResolution(maxW, maxH)
+
 local gui = {}
 gui.buttons = {}
 
@@ -36,35 +40,42 @@ function gui.drawMain(trades)
     center(1, 2, W, "АВТОМАТИЧЕСКИЙ ОБМЕННИК РУД", gui.COLORS.energy, gui.COLORS.panel)
     
     gui.btn("admin_login", W - 14, 2, 12, 1, "АДМИН", gui.COLORS.btn)
-    text(4, 5, "ДОСТУПНЫЕ ОБМЕНЫ (Просто положите ресурсы в левый сундук):", gui.COLORS.warn, gui.COLORS.bg)
+    text(4, 5, "ДОСТУПНЫЕ ОБМЕНЫ (Просто положите руду в левый сундук):", gui.COLORS.warn, gui.COLORS.bg)
     
-    local y = 7
     if #trades == 0 then 
-        text(4, y, "Обменов пока нет...", gui.COLORS.label, gui.COLORS.bg)
+        text(4, 7, "Обменов пока нет...", gui.COLORS.label, gui.COLORS.bg)
     else
-        for _, t in ipairs(trades) do
-            if y > H - 4 then break end -- Защита от вылезания за экран
+        -- КОМПАКТНЫЙ ДИЗАЙН В 2 КОЛОНКИ
+        local col_w = math.floor((W - 8) / 2)
+        local start_y = 7
+        local max_rows = H - start_y - 1
+        
+        for i, t in ipairs(trades) do
+            local col = math.floor((i - 1) / max_rows)
+            local row = (i - 1) % max_rows
+            local x = 4 + col * col_w
+            local y = start_y + row
             
-            -- Красивая карточка товара
-            rect(4, y, W - 8, 3, gui.COLORS.tileBg)
+            if col > 1 then break end -- Защита: не больше 2 колонок
             
-            -- Вход (Руда)
-            text(6, y + 1, t.in_label, gui.COLORS.warn, gui.COLORS.tileBg)
-            text(6 + unicode.len(t.in_label) + 1, y + 1, "(1 шт)", gui.COLORS.label, gui.COLORS.tileBg)
+            -- Зебра (чередование цветов строк для красоты)
+            local bg = (row % 2 == 0) and gui.COLORS.tileBg or gui.COLORS.bg
+            rect(x, y, col_w - 1, 1, bg)
             
-            -- Стрелка по центру
-            local cx = math.floor(W / 2) - 6
-            text(cx, y + 1, "======>", gui.COLORS.energy, gui.COLORS.tileBg)
+            local max_name_len = math.floor(col_w * 0.32)
+            local in_name = unicode.sub(t.in_label, 1, max_name_len)
+            local out_name = unicode.sub(t.out_label, 1, max_name_len)
             
-            -- Выход (Слиток)
-            local out_str = string.format("%s (%d шт)", t.out_label, t.ratio)
-            text(cx + 10, y + 1, out_str, gui.COLORS.good, gui.COLORS.tileBg)
-            
-            -- Склад (Справа)
-            local stock_str = string.format("На складе: %d шт", t.stock or 0)
-            text(W - 6 - unicode.len(stock_str), y + 1, stock_str, gui.COLORS.text, gui.COLORS.tileBg)
-            
-            y = y + 4
+            -- Вход
+            text(x + 1, y, in_name, gui.COLORS.warn, bg)
+            -- Значок стрелки
+            text(x + 2 + unicode.len(in_name), y, "»", gui.COLORS.label, bg)
+            -- Выход
+            local out_str = out_name .. " x" .. t.ratio
+            text(x + 4 + unicode.len(in_name), y, out_str, gui.COLORS.good, bg)
+            -- Склад
+            local stock_str = "[" .. tostring(t.stock or 0) .. "]"
+            text(x + col_w - 1 - unicode.len(stock_str), y, stock_str, gui.COLORS.text, bg)
         end
     end
 end
@@ -78,13 +89,12 @@ function gui.drawAdmin(substate, items, page, maxPage)
     gui.btn("close_admin", W - 16, 5, 14, 3, "НАЗАД", gui.COLORS.bad)
 
     rect(4, 9, W - 8, H - 14, gui.COLORS.panel)
-    local y = 10
     
     if items then
-        for i, el in ipairs(items) do
-            if y >= H - 5 then break end
-            
-            if substate == "logs" then
+        if substate == "logs" then
+            local y = 10
+            for i, el in ipairs(items) do
+                if y >= H - 5 then break end
                 local str = tostring(type(el) == "table" and el.item or el)
                 local actionCol = str:match("ОБМЕН") and gui.COLORS.good or gui.COLORS.bad
                 local time_part, rest = str:match("(%[%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d%]) (.*)")
@@ -102,22 +112,35 @@ function gui.drawAdmin(substate, items, page, maxPage)
                         else currentLine = currentLine == "" and word or (currentLine .. " " .. word) end
                     end
                     if currentLine ~= "" and y < H - 5 then
-                        text(startX, y, currentLine, actionCol, gui.COLORS.panel)
-                        y = y + 1
+                        text(startX, y, currentLine, actionCol, gui.COLORS.panel); y = y + 1
                     end
                 else 
-                    text(6, y, unicode.sub(str, 1, W - 12), actionCol, gui.COLORS.panel)
-                    y = y + 1
+                    text(6, y, unicode.sub(str, 1, W - 12), actionCol, gui.COLORS.panel); y = y + 1
                 end
-            else
-                -- Красивые блоки для списка обменов в админке
-                rect(6, y, W - 12, 3, gui.COLORS.tileBg)
+            end
+        else
+            -- КОМПАКТНЫЙ ВИД ОБМЕНОВ В АДМИНКЕ (Тоже 2 колонки)
+            local col_w = math.floor((W - 12) / 2)
+            local max_rows = H - 15
+            
+            for i, el in ipairs(items) do
+                local col = math.floor((i - 1) / max_rows)
+                local row = (i - 1) % max_rows
+                local x = 6 + col * col_w
+                local yy = 10 + row
                 
-                local line = string.format("%s (1 шт)   ====>   %s (%d шт)", el.item.in_label, el.item.out_label, el.item.ratio)
-                text(8, y + 1, line, gui.COLORS.text, gui.COLORS.tileBg)
+                local bg = (row % 2 == 0) and gui.COLORS.tileBg or gui.COLORS.panel
+                rect(x, yy, col_w - 1, 1, bg)
                 
-                gui.btn("adm_del_"..el.origIdx, W - 20, y + 1, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
-                y = y + 4
+                local in_name = unicode.sub(el.item.in_label, 1, math.floor(col_w * 0.3))
+                local out_name = unicode.sub(el.item.out_label, 1, math.floor(col_w * 0.3))
+                
+                text(x + 1, yy, in_name, gui.COLORS.warn, bg)
+                text(x + 2 + unicode.len(in_name), yy, "»", gui.COLORS.label, bg)
+                text(x + 4 + unicode.len(in_name), yy, out_name .. " x" .. el.item.ratio, gui.COLORS.text, bg)
+                
+                -- Мини-кнопка удаления
+                gui.btn("adm_del_"..el.origIdx, x + col_w - 9, yy, 8, 1, " УДАЛ ", gui.COLORS.bad)
             end
         end
     end
