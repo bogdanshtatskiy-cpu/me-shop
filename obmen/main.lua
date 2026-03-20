@@ -112,12 +112,12 @@ local tickTimer = 0
 local stockTimer = 0
 
 while true do
-    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.05) -- Обновляем события еще быстрее
+    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.05)
     
     if not ev then 
         if state == "main" and me_ok then
             tickTimer = tickTimer + 0.05
-            if tickTimer >= 0.1 then -- ПОЧТИ МГНОВЕННОЕ ЗАБИРАНИЕ РУДЫ (10 раз в секунду)
+            if tickTimer >= 0.1 then 
                 tickTimer = 0
                 local found, ok, msg, actual_out, t, input_qty = me.processOneExchange(trades)
                 if found then
@@ -159,14 +159,14 @@ while true do
                 elseif action == "adm_logs" then state = "admin_logs"; adminPage = 1; refreshScreen()
                 
                 elseif action == "adm_add" then
-                    ed_data = {title="СКАНИРОВАНИЕ", msg="Положите руду в 1 СЛОТ, а слиток - во 2 СЛОТ левого сундука", err=false}
+                    ed_data = {title="СКАНИРОВАНИЕ", msg="Положите руду в ЛЕВЫЙ сундук, а слиток - в ПРАВЫЙ", err=false}
                     state = "admin_wait_scan"; refreshScreen()
                 
                 elseif action == "close_modal" then
                     if state == "admin_wait_scan" then
                         local in_st, out_st = me.getScanItems()
-                        if not in_st then ed_data = {title="ОШИБКА", msg="В 1 слоте нет руды!", err=true}; state = "modal_msg"
-                        elseif not out_st then ed_data = {title="ОШИБКА", msg="Во 2 слоте нет слитка!", err=true}; state = "modal_msg"
+                        if not in_st then ed_data = {title="ОШИБКА", msg="В левом сундуке пусто!", err=true}; state = "modal_msg"
+                        elseif not out_st then ed_data = {title="ОШИБКА", msg="В правом сундуке пусто!", err=true}; state = "modal_msg"
                         else
                             ed_data = {
                                 input = {name = in_st.name, damage = in_st.damage},
