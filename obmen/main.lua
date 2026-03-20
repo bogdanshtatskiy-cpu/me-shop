@@ -92,7 +92,8 @@ local function getNextDbSlot()
 end
 
 local function refreshScreen()
-    if state == "main" then gui.drawMain(trades)
+    if state == "main" then 
+        gui.drawMain(trades)
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
         local list = (state == "admin_trades") and trades or loadLogsLocal()
         local maxPage = math.ceil(#list / 17); if maxPage < 1 then maxPage = 1 end
@@ -102,8 +103,13 @@ local function refreshScreen()
             table.insert(pItems, {item = list[i], origIdx = (state == "admin_trades" and i or nil)})
         end
         gui.drawAdmin(state:gsub("admin_", ""), pItems, adminPage, maxPage)
-    elseif state == "editor" then gui.drawEditorModal(ed_data)
-    elseif state == "modal_msg" then gui.drawNotification(ed_data.title, ed_data.msg, ed_data.err) end
+    elseif state == "admin_wait_scan" then 
+        gui.drawNotification(ed_data.title, ed_data.msg, ed_data.err)
+    elseif state == "editor" then 
+        gui.drawEditorModal(ed_data)
+    elseif state == "modal_msg" then 
+        gui.drawNotification(ed_data.title, ed_data.msg, ed_data.err) 
+    end
 end
 
 local function processExchanges()
@@ -132,7 +138,7 @@ local function processExchanges()
 end
 
 loadTrades()
-pcall(me.updateStock, trades)
+if me_ok then pcall(me.updateStock, trades) end
 refreshScreen()
 if not me_ok then ed_data={title="ОШИБКА СИСТЕМЫ", msg=me_msg, err=true}; state="modal_msg"; refreshScreen() end
 
@@ -140,16 +146,24 @@ local tickTimer = 0
 local stockTimer = 0
 
 while true do
-    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(1)
+    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.5) -- Ждем полсекунды (быстрый отклик кнопок)
     
     if not ev then 
+        -- ФОНОВАЯ РАБОТА
         if state == "main" and me_ok then
             tickTimer = tickTimer + 1
-            if tickTimer >= 1 then tickTimer = 0; processExchanges() end
+            if tickTimer >= 2 then 
+                tickTimer = 0; processExchanges() 
+            end
             stockTimer = stockTimer + 1
-            if stockTimer >= 60 then stockTimer = 0; pcall(me.updateStock, trades); refreshScreen() end
+            if stockTimer >= 10 then -- Раз в 5 секунд обновляем цифры из МЭ сети
+                stockTimer = 0
+                pcall(me.updateStock, trades)
+                refreshScreen() 
+            end
         end
     else
+        -- ОБРАБОТКА НАЖАТИЙ (РАБОТАЕТ МОМЕНТАЛЬНО)
         if ev == "touch" then
             local action = gui.checkClick(arg1, arg2)
             if action then
