@@ -18,6 +18,7 @@ local ed_data = {}
 local adminPage = 1
 local adminMaxPage = 1
 local isAdminMode = false
+local isChestFull = false -- Глобальный статус переполнения
 
 local function formatUnixTime(unix)
     local z = math.floor(unix / 86400) + 719468
@@ -96,13 +97,12 @@ end
 
 local function refreshScreen()
     if state == "main" then 
-        gui.drawMain(trades)
+        gui.drawMain(trades, isChestFull)
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
         local list = (state == "admin_trades") and trades or loadLogsLocal()
         
         local _, h = component.gpu.getResolution()
         local isLogs = (state == "admin_logs")
-        -- Для обменов с отступами вмещается в 2 раза меньше
         local perPage = isLogs and (h - 15) or math.floor((h - 15) / 2)
         
         local maxPage = math.ceil(#list / perPage); if maxPage < 1 then maxPage = 1 end
@@ -142,6 +142,7 @@ while true do
                 local found, ok, msg, actual_out, t, input_qty = me.processOneExchange(trades)
                 if found then
                     if ok then
+                        isChestFull = false -- Если обмен прошел, значит место есть!
                         t.stock = t.stock - actual_out
                         if actual_out == (input_qty * t.ratio) then
                             writeLog("ОБМЕН", string.format("%d %s -> %d %s", input_qty, t.in_label, actual_out, t.out_label))
@@ -149,6 +150,9 @@ while true do
                             writeLog("ВНИМАНИЕ", string.format("Взято %d %s, выдано %d %s. %s", input_qty, t.in_label, actual_out, t.out_label, msg))
                         end
                     else
+                        if msg == "Правый сундук забит" then
+                            isChestFull = true -- Мгновенно включаем баннер
+                        end
                         writeLog("СБОЙ", string.format("Отмена для %s: %s", t.in_label, msg))
                     end
                     refreshScreen()
@@ -159,6 +163,15 @@ while true do
             if stockTimer >= 5.0 then
                 stockTimer = 0
                 pcall(me.updateStock, trades)
+                
+                -- Каждые 5 сек проверяем сундук, даже если никто не меняет руду
+                if me_ok then
+                    local ok, full = pcall(me.isOutputChestFull)
+                    if ok and full ~= isChestFull then
+                        isChestFull = full
+                    end
+                end
+                
                 refreshScreen() 
             end
         end
