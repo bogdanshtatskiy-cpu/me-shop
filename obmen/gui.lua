@@ -66,11 +66,28 @@ function gui.drawAdmin(substate, items, page, maxPage)
                 local str = tostring(el)
                 local actionCol = str:match("ОБМЕН") and gui.COLORS.good or gui.COLORS.bad
                 local time_part, rest = str:match("(%[%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d%]) (.*)")
+                
+                -- УМНЫЙ ПЕРЕНОС ЛОГОВ (Теперь ошибки видно до конца!)
                 if time_part and rest then
                     text(6, y, time_part, gui.COLORS.label, gui.COLORS.panel)
-                    text(6 + unicode.len(time_part) + 1, y, unicode.sub(rest, 1, W - 32), actionCol, gui.COLORS.panel)
-                else text(6, y, unicode.sub(str, 1, W - 12), actionCol, gui.COLORS.panel) end
-                y = y + 1
+                    local startX = 6 + unicode.len(time_part) + 1
+                    local maxW = W - startX - 4
+                    local currentLine = ""
+                    for word in string.gmatch(rest, "%S+") do
+                        if unicode.len(currentLine) + unicode.len(word) + 1 > maxW then
+                            text(startX, y, currentLine, actionCol, gui.COLORS.panel)
+                            y = y + 1; currentLine = word
+                            if y >= H - 5 then break end
+                        else currentLine = currentLine == "" and word or (currentLine .. " " .. word) end
+                    end
+                    if currentLine ~= "" and y < H - 5 then
+                        text(startX, y, currentLine, actionCol, gui.COLORS.panel)
+                        y = y + 1
+                    end
+                else 
+                    text(6, y, unicode.sub(str, 1, W - 12), actionCol, gui.COLORS.panel)
+                    y = y + 1
+                end
             else
                 local line = string.format("%s -> %s (x%d)", el.item.in_label, el.item.out_label, el.item.ratio)
                 text(6, y, line, gui.COLORS.text, gui.COLORS.panel)
