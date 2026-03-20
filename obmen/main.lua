@@ -69,7 +69,6 @@ local function writeLog(action, details)
     local f = io.open("/home/obmen_logs.txt", "a")
     if f then f:write(log_line .. "\n"); f:close() end
     
-    -- УМНАЯ АВТООЧИСТКА: Если файл больше 50КБ, оставляем только последние 150 логов
     local size = fs.size("/home/obmen_logs.txt")
     if size and size > 50000 then
         local logs = loadLogsLocal()
@@ -101,9 +100,11 @@ local function refreshScreen()
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
         local list = (state == "admin_trades") and trades or loadLogsLocal()
         
-        -- УМНАЯ ПАГИНАЦИЯ: Для логов 35 строк, для обменов 8 блоков
+        -- ДИНАМИЧЕСКИЙ РАСЧЕТ ПАГИНАЦИИ ПОД РАЗМЕР ЭКРАНА
+        local _, h = component.gpu.getResolution()
+        local max_rows = h - 15
         local isLogs = (state == "admin_logs")
-        local perPage = isLogs and 35 or 8
+        local perPage = isLogs and max_rows or (max_rows * 2) -- Обмены в 2 колонки
         
         local maxPage = math.ceil(#list / perPage); if maxPage < 1 then maxPage = 1 end
         adminMaxPage = maxPage
@@ -178,7 +179,6 @@ while true do
                 elseif action == "adm_trades" then state = "admin_trades"; adminPage = 1; refreshScreen()
                 elseif action == "adm_logs" then state = "admin_logs"; adminPage = 1; refreshScreen()
                 
-                -- ИСПРАВЛЕННЫЕ КНОПКИ ПАГИНАЦИИ
                 elseif action == "adm_prev" then
                     if adminPage > 1 then adminPage = adminPage - 1; refreshScreen() end
                 elseif action == "adm_next" then
