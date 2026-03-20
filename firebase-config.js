@@ -1,10 +1,10 @@
 // firebase-config.js
 const firebaseConfig = {
-    apiKey: "AIzaSyCC468vjicHp5fCkxrxwsHTJQ7cXwdZMOw",
-    authDomain: "me-shop-71468.firebaseapp.com",
-    databaseURL: "https://me-shop-71468-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "me-shop-71468",
-    storageBucket: "me-shop-71468.firebasestorage.app",
-    messagingSenderId: "44514804398",
-    appId: "1:44514804398:web:57f5a99080902486b9233f"
+  apiKey: "AIzaSyDRJD-4-HgNOcAANPCAWd3BRWWVlj4RueY",
+  authDomain: "desshop-9753e.firebaseapp.com",
+  databaseURL: "https://desshop-9753e-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "desshop-9753e",
+  storageBucket: "desshop-9753e.firebasestorage.app",
+  messagingSenderId: "866385276657",
+  appId: "1:866385276657:web:e5efbce7095cf6b7358350"
 };
