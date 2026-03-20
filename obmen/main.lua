@@ -18,7 +18,11 @@ local ed_data = {}
 local adminPage = 1
 local adminMaxPage = 1
 local isAdminMode = false
-local isChestFull = false -- Глобальный статус переполнения
+local isChestFull = false
+
+-- Переменные для анти-спама логов
+local last_err_msg = ""
+local last_err_time = 0
 
 local function formatUnixTime(unix)
     local z = math.floor(unix / 86400) + 719468
@@ -140,39 +144,75 @@ while true do
             if tickTimer >= 0.1 then 
                 tickTimer = 0
                 local found, ok, msg, actual_out, t, input_qty = me.processOneExchange(trades)
+                
                 if found then
+                    local needs_redraw = false
+                    
                     if ok then
-                        isChestFull = false -- Если обмен прошел, значит место есть!
+                        if isChestFull then 
+                            isChestFull = false
+                            needs_redraw = true 
+                        end
+                        
                         t.stock = t.stock - actual_out
+                        needs_redraw = true
+                        
                         if actual_out == (input_qty * t.ratio) then
                             writeLog("ОБМЕН", string.format("%d %s -> %d %s", input_qty, t.in_label, actual_out, t.out_label))
                         else
                             writeLog("ВНИМАНИЕ", string.format("Взято %d %s, выдано %d %s. %s", input_qty, t.in_label, actual_out, t.out_label, msg))
                         end
+                        
+                        last_err_msg = "" -- Сброс спам-фильтра
                     else
-                        if msg == "Правый сундук забит" then
-                            isChestFull = true -- Мгновенно включаем баннер
+                        local is_full_err = msg:match("забит") or msg:match("переполнен")
+                        if is_full_err then
+                            if not isChestFull then
+                                isChestFull = true
+                                needs_redraw = true
+                            end
                         end
-                        writeLog("СБОЙ", string.format("Отмена для %s: %s", t.in_label, msg))
+                        
+                        -- АНТИ-СПАМ ФИЛЬТР ЛОГОВ (пишем ошибку не чаще 1 раза в 10 сек)
+                        if msg ~= last_err_msg or (computer.uptime() - last_err_time) > 10 then
+                            writeLog("СБОЙ", string.format("Отмена для %s: %s", t.in_label, msg))
+                            last_err_msg = msg
+                            last_err_time = computer.uptime()
+                        end
                     end
-                    refreshScreen()
+                    
+                    if needs_redraw then refreshScreen() end
                 end
             end
             
             stockTimer = stockTimer + 0.05
             if stockTimer >= 5.0 then
                 stockTimer = 0
+                
+                -- Сохраняем старые данные для сравнения
+                local old_stocks = {}
+                for i, tr in ipairs(trades) do old_stocks[i] = tr.stock end
+                
                 pcall(me.updateStock, trades)
                 
-                -- Каждые 5 сек проверяем сундук, даже если никто не меняет руду
+                local changed = false
+                
+                -- Проверяем, изменились ли цифры склада
+                for i, tr in ipairs(trades) do
+                    if old_stocks[i] ~= tr.stock then changed = true; break end
+                end
+                
+                -- Проверяем, нужно ли показать/скрыть баннер, если никто ничего не кидает
                 if me_ok then
-                    local ok, full = pcall(me.isOutputChestFull)
-                    if ok and full ~= isChestFull then
+                    local ok_full, full = pcall(me.isOutputChestFull)
+                    if ok_full and full ~= isChestFull then
                         isChestFull = full
+                        changed = true
                     end
                 end
                 
-                refreshScreen() 
+                -- ПЕРЕРИСОВЫВАЕМ ЭКРАН ТОЛЬКО ЕСЛИ ЧТО-ТО ВИЗУАЛЬНО ПОМЕНЯЛОСЬ!
+                if changed then refreshScreen() end 
             end
         end
     else
