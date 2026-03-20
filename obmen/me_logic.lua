@@ -4,17 +4,14 @@ local sides = require("sides")
 
 local me = {}
 local transposer, inv_ctrl, db, me_bus
+local A_OUTPUT -- Это мы найдем автоматически (сторону сундука)
 
 -- =========================================================
--- ЖЕСТКИЕ НАСТРОЙКИ СТОРОН (БЕЗ ВСЯКИХ АВТОПОИСКОВ!)
+-- ЖЕСТКИЕ НАСТРОЙКИ (ЛЕВАЯ ЧАСТЬ)
 -- =========================================================
--- ЛЕВАЯ ЧАСТЬ (ТРАНСПОУЗЕР)
-local T_INPUT  = sides.up     -- Сундук с рудой стоит СВЕРХУ
-local T_DUMP   = sides.down   -- МЭ Интерфейс для сброса стоит СНИЗУ
-
--- ПРАВАЯ ЧАСТЬ (АДАПТЕРЫ И ВЫДАЧА)
-local A_OUTPUT  = sides.up    -- Сундук со слитками стоит СВЕРХУ от Адаптера 1
-local ME_EXPORT = sides.up    -- МЭ Интерфейс выплевывает слитки ВВЕРХ в сундук
+local T_INPUT  = sides.up     -- Сундук с рудой СВЕРХУ от Транспоузера
+local T_DUMP   = sides.down   -- МЭ Интерфейс СНИЗУ от Транспоузера
+local ME_EXPORT = sides.up    -- МЭ Интерфейс выдачи выплевывает слитки ВВЕРХ
 -- =========================================================
 
 function me.init()
@@ -30,6 +27,18 @@ function me.init()
     if component.isAvailable("me_interface") then me_bus = component.me_interface
     elseif component.isAvailable("me_controller") then me_bus = component.me_controller
     else return false, "МЭ Интерфейс (для выдачи) не подключен!" end
+    
+    -- БЕЗОПАСНЫЙ ПОИСК СУНДУКА ДЛЯ АДАПТЕРА 1
+    for s = 0, 5 do
+        local ok, sz = pcall(inv_ctrl.getInventorySize, s)
+        -- Если блок имеет инвентарь размером 27 или больше (как у сундука)
+        if ok and sz and sz >= 27 then 
+            A_OUTPUT = s
+            break
+        end
+    end
+
+    if not A_OUTPUT then return false, "Адаптер 1 не видит сундук вплотную к себе!" end
     
     return true, "OK"
 end
@@ -83,11 +92,9 @@ function me.updateStock(trades)
 end
 
 function me.processExchange(slot, input_qty, db_slot, output_qty)
-    -- 1. Скидываем руду в МЭ через Транспоузер вниз
     local pushed = transposer.transferItem(T_INPUT, T_DUMP, input_qty, slot)
     if pushed < input_qty then return false, "Ошибка сброса руды" end
     
-    -- 2. Выдаем слитки из МЭ вверх в сундук
     local exported = 0
     local try_count = 0
     while exported < output_qty and try_count < 5 do
