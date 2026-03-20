@@ -63,11 +63,11 @@ function gui.drawAdmin(substate, items, page, maxPage)
         for i, el in ipairs(items) do
             if y >= H - 5 then break end
             if substate == "logs" then
-                local str = tostring(el)
+                -- ИСПРАВЛЕН БАГ С TABLE: 0x...
+                local str = tostring(type(el) == "table" and el.item or el)
                 local actionCol = str:match("ОБМЕН") and gui.COLORS.good or gui.COLORS.bad
                 local time_part, rest = str:match("(%[%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d%]) (.*)")
                 
-                -- УМНЫЙ ПЕРЕНОС ЛОГОВ (Теперь ошибки видно до конца!)
                 if time_part and rest then
                     text(6, y, time_part, gui.COLORS.label, gui.COLORS.panel)
                     local startX = 6 + unicode.len(time_part) + 1
