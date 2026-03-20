@@ -122,10 +122,16 @@ local function processExchanges()
                 
                 if can_process_input > 0 then
                     local out_qty = can_process_input * t.ratio
-                    local ok, err = me.processExchange(slot, can_process_input, t.db_slot, out_qty)
+                    
+                    -- ОБНОВЛЕННАЯ ЛОГИКА С ПРОВЕРКОЙ ОШИБОК
+                    local ok, msg, actual_out = me.processExchange(slot, can_process_input, t, out_qty)
                     if ok then
-                        t.stock = t.stock - out_qty
-                        writeLog("ОБМЕН", string.format("%d %s -> %d %s", can_process_input, t.in_label, out_qty, t.out_label))
+                        t.stock = t.stock - actual_out
+                        if actual_out == out_qty then
+                            writeLog("ОБМЕН", string.format("%d %s -> %d %s", can_process_input, t.in_label, actual_out, t.out_label))
+                        else
+                            writeLog("ОШИБКА ВЫДАЧИ", string.format("Взято %d %s, выдано %d %s. Ошибка: %s", can_process_input, t.in_label, actual_out, t.out_label, msg))
+                        end
                         refreshScreen()
                     end
                 end
@@ -144,7 +150,6 @@ local tickTimer = 0
 local stockTimer = 0
 
 while true do
-    -- Снизили задержку до 0.1 сек. Теперь кнопки нажимаются МГНОВЕННО!
     local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.1)
     
     if not ev then 
@@ -155,7 +160,7 @@ while true do
             end
             
             stockTimer = stockTimer + 0.1
-            if stockTimer >= 5.0 then -- Раз в 5 секунд обновляем цифры на экране (МГНОВЕННО)
+            if stockTimer >= 5.0 then
                 stockTimer = 0
                 pcall(me.updateStock, trades)
                 refreshScreen() 
