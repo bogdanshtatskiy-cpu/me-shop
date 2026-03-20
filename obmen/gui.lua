@@ -39,11 +39,32 @@ function gui.drawMain(trades)
     text(4, 5, "ДОСТУПНЫЕ ОБМЕНЫ (Просто положите ресурсы в левый сундук):", gui.COLORS.warn, gui.COLORS.bg)
     
     local y = 7
-    if #trades == 0 then text(4, y, "Обменов пока нет...", gui.COLORS.label, gui.COLORS.bg)
+    if #trades == 0 then 
+        text(4, y, "Обменов пока нет...", gui.COLORS.label, gui.COLORS.bg)
     else
         for _, t in ipairs(trades) do
-            local line = string.format("%s 1шт  ->  %s %dшт  (В сети: %d шт)", t.in_label, t.out_label, t.ratio, t.stock or 0)
-            text(4, y, line, gui.COLORS.text, gui.COLORS.bg); y = y + 2
+            if y > H - 4 then break end -- Защита от вылезания за экран
+            
+            -- Красивая карточка товара
+            rect(4, y, W - 8, 3, gui.COLORS.tileBg)
+            
+            -- Вход (Руда)
+            text(6, y + 1, t.in_label, gui.COLORS.warn, gui.COLORS.tileBg)
+            text(6 + unicode.len(t.in_label) + 1, y + 1, "(1 шт)", gui.COLORS.label, gui.COLORS.tileBg)
+            
+            -- Стрелка по центру
+            local cx = math.floor(W / 2) - 6
+            text(cx, y + 1, "======>", gui.COLORS.energy, gui.COLORS.tileBg)
+            
+            -- Выход (Слиток)
+            local out_str = string.format("%s (%d шт)", t.out_label, t.ratio)
+            text(cx + 10, y + 1, out_str, gui.COLORS.good, gui.COLORS.tileBg)
+            
+            -- Склад (Справа)
+            local stock_str = string.format("На складе: %d шт", t.stock or 0)
+            text(W - 6 - unicode.len(stock_str), y + 1, stock_str, gui.COLORS.text, gui.COLORS.tileBg)
+            
+            y = y + 4
         end
     end
 end
@@ -62,8 +83,8 @@ function gui.drawAdmin(substate, items, page, maxPage)
     if items then
         for i, el in ipairs(items) do
             if y >= H - 5 then break end
+            
             if substate == "logs" then
-                -- ИСПРАВЛЕН БАГ С TABLE: 0x...
                 local str = tostring(type(el) == "table" and el.item or el)
                 local actionCol = str:match("ОБМЕН") and gui.COLORS.good or gui.COLORS.bad
                 local time_part, rest = str:match("(%[%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d%]) (.*)")
@@ -89,10 +110,14 @@ function gui.drawAdmin(substate, items, page, maxPage)
                     y = y + 1
                 end
             else
-                local line = string.format("%s -> %s (x%d)", el.item.in_label, el.item.out_label, el.item.ratio)
-                text(6, y, line, gui.COLORS.text, gui.COLORS.panel)
-                gui.btn("adm_del_"..el.origIdx, W - 20, y, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
-                y = y + 2
+                -- Красивые блоки для списка обменов в админке
+                rect(6, y, W - 12, 3, gui.COLORS.tileBg)
+                
+                local line = string.format("%s (1 шт)   ====>   %s (%d шт)", el.item.in_label, el.item.out_label, el.item.ratio)
+                text(8, y + 1, line, gui.COLORS.text, gui.COLORS.tileBg)
+                
+                gui.btn("adm_del_"..el.origIdx, W - 20, y + 1, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
+                y = y + 4
             end
         end
     end
