@@ -1,59 +1,49 @@
 -- /obmen/me_logic.lua
 local component = require("component")
-local sides = require("sides")
+local os = require("os")
 
 local me = {}
-local transposer, inv_ctrl, db, me_bus
-local a_out
-
-local T_INPUT  = 1 -- ВВЕРХ
-local T_DUMP   = 0 -- ВНИЗ
-local ME_EXPORT = 1 -- ВВЕРХ
+local input_chest, me_bus, db
 
 function me.init()
-    if not component.isAvailable("transposer") then return false, "Транспоузер не подключен!" end
-    transposer = component.transposer
-    
-    if not component.isAvailable("inventory_controller") then return false, "Адаптер 1 (Контроллер инв.) не подключен!" end
-    inv_ctrl = component.inventory_controller
-    
-    if not component.isAvailable("database") then return false, "Адаптер 2 (База Данных) не подключен!" end
     db = component.database
-    
-    if component.isAvailable("me_interface") then me_bus = component.me_interface
-    elseif component.isAvailable("me_controller") then me_bus = component.me_controller
-    else return false, "МЭ Интерфейс (для выдачи) не подключен!" end
-    
-    for s = 0, 5 do
-        local ok, sz = pcall(inv_ctrl.getInventorySize, s)
-        if ok and sz and sz >= 27 then a_out = s; break end
+    if not db then return false, "База Данных не найдена в Адаптере 2!" end
+
+    -- Умный поиск: Адаптеры сами понимают, к чему они прилеплены
+    for address, compType in component.list() do
+        local p = component.proxy(address)
+        
+        -- Если у блока есть функция setInterfaceConfiguration - это МЭ Интерфейс!
+        if p.setInterfaceConfiguration and p.pushItem then
+            me_bus = p
+            
+        -- Если у блока есть getAllStacks, но нет настроек МЭ - это Сундук!
+        elseif p.getAllStacks and p.pushItem and not p.setInterfaceConfiguration then
+            input_chest = p
+        end
     end
-    if not a_out then return false, "Адаптер 1 не видит выходной сундук!" end
+
+    if not input_chest then return false, "Адаптер 1 не видит ЛЕВЫЙ сундук!" end
+    if not me_bus then return false, "Адаптер 2 не видит ПРАВЫЙ МЭ Интерфейс!" end
+
     return true, "OK"
 end
 
 function me.getScanItems()
-    local in_stack = transposer.getStackInSlot(T_INPUT, 1)
-    local out_stack = inv_ctrl.getStackInSlot(a_out, 1)
-    return in_stack, out_stack
-end
+    -- Для сканирования обмена просто кладем Руду в 1 слот, а Слиток во 2 слот левого сундука!
+    local ok, stacks = pcall(input_chest.getAllStacks, 0)
+    if not ok or type(stacks) ~= "table" then return nil, nil end
 
-function me.storeToDB(db_slot)
-    return inv_ctrl.store(a_out, 1, db.address, db_slot)
-end
-
-function me.getFreeSpace(target_name, target_dmg)
-    local free = 0
-    local size = inv_ctrl.getInventorySize(a_out)
-    if not size then return 0 end
-    for i = 1, size do
-        local stack = inv_ctrl.getStackInSlot(a_out, i)
-        if not stack then free = free + 64
-        elseif stack.name == target_name and math.floor(stack.damage or 0) == math.floor(target_dmg or 0) then
-            free = free + (stack.maxSize - stack.size)
-        end
+    local function formatItem(data)
+        if type(data) ~= "table" or not data.id then return nil end
+        return {
+            name = data.id,
+            damage = data.dmg or 0,
+            label = data.display_name or data.displayName or data.id
+        }
     end
-    return free
+
+    return formatItem(stacks[1]), formatItem(stacks[2])
 end
 
 function me.updateStock(trades)
@@ -63,79 +53,62 @@ function me.updateStock(trades)
         if ok and items then
             for _, item in pairs(items) do
                 if type(item) == "table" and item.name == t.output.name then
-                    t.stock = t.stock + (item.size or 0)
+                    t.stock = t.stock + (item.size or item.qty or 0)
                 end
             end
         end
     end
 end
 
--- НОВАЯ ЛОГИКА: ЧИТАЕМ СЛОТ ЗА СЛОТОМ И СРАЗУ ВЫДАЕМ
 function me.processOneExchange(trades)
-    local size = transposer.getInventorySize(T_INPUT)
-    if not size then return false end
-    
-    for slot = 1, size do
-        local item = transposer.getStackInSlot(T_INPUT, slot)
-        if item and item.name then
+    local ok, stacks = pcall(input_chest.getAllStacks, 0)
+    if not ok or type(stacks) ~= "table" then return false end
+
+    for slot, data in pairs(stacks) do
+        if type(data) == "table" and data.id then
             for _, t in ipairs(trades) do
-                if item.name == t.input.name and math.floor(item.damage or 0) == math.floor(t.input.damage or 0) then
-                    
+                if data.id == t.input.name and (data.dmg or 0) == (t.input.damage or 0) then
                     local max_out_from_me = math.floor(t.stock / t.ratio)
-                    local free_space = me.getFreeSpace(t.output.name, t.output.damage)
-                    local max_out_space = math.floor(free_space / t.ratio)
-                    local can_process = math.min(item.size, max_out_from_me, max_out_space)
-                    
+                    local can_process = math.min(data.qty or data.size, max_out_from_me)
+
                     if can_process > 0 then
-                        local out_qty = can_process * t.ratio
-                        local ok, msg, actual_out = me.executeExchange(slot, can_process, t, out_qty)
-                        return true, ok, msg, actual_out, t, can_process
+                        -- 1. Скидываем руду ВНИЗ в МЭ интерфейс под левым сундуком
+                        local pushed_ore = input_chest.pushItem("DOWN", slot, can_process)
+
+                        if pushed_ore and pushed_ore > 0 then
+                            local actual_out_qty = pushed_ore * t.ratio
+
+                            -- 2. ТВОЯ ГЕНИАЛЬНАЯ ЛОГИКА: Настраиваем правый МЭ интерфейс на выдачу
+                            db.clear(1)
+                            me_bus.store({name = t.output.name, damage = t.output.damage}, db.address, 1)
+                            me_bus.setInterfaceConfiguration(1, db.address, 1, 64)
+
+                            local drop = 0
+                            -- 3. Выплевываем ВВЕРХ в правый сундук (Если забит - ждем!)
+                            while drop < actual_out_qty do
+                                local chunk = math.min(64, actual_out_qty - drop)
+                                local dropcount = me_bus.pushItem("UP", 1, chunk)
+
+                                if dropcount and dropcount > 0 then
+                                    drop = drop + dropcount
+                                else
+                                    os.sleep(1) -- Ждем 1 секунду, пока игрок освободит сундук
+                                end
+                            end
+
+                            -- 4. Сбрасываем настройку
+                            me_bus.setInterfaceConfiguration(1, db.address, 1, 0)
+
+                            return true, true, "OK", drop, t, pushed_ore
+                        else
+                            return true, false, "МЭ интерфейс не принимает руду", 0, t, can_process
+                        end
                     end
                 end
             end
         end
     end
-    return false -- Ничего не нашли/не обработали
-end
-
-function me.executeExchange(slot, input_qty, t_data, output_qty)
-    local pushed = transposer.transferItem(T_INPUT, T_DUMP, input_qty, slot)
-    
-    if type(pushed) == "boolean" and not pushed then return false, "МЭ приема занята", 0
-    elseif type(pushed) == "number" and pushed < input_qty then return false, "МЭ не приняло всю руду", 0
-    elseif not pushed then return false, "Сбой транспоузера приема", 0 end
-    
-    -- БЕРЕМ ИДЕАЛЬНЫЙ СЛЕПОК ИЗ БАЗЫ ДАННЫХ
-    local fp = db.get(t_data.db_slot)
-    if not fp then return true, "Пустой слепок в БД! Пересоздайте обмен.", 0 end
-    
-    local exported = 0
-    local try_count = 0
-    local last_err = ""
-    
-    while exported < output_qty and try_count < 5 do
-        local chunk = math.min(output_qty - exported, 64)
-        
-        -- Скармливаем МЭ интерфейсу идеальный слепок (fp)
-        local ok, res = pcall(me_bus.exportItem, fp, ME_EXPORT, chunk)
-        
-        if ok then
-            if type(res) == "table" and res.size then exported = exported + res.size
-            elseif type(res) == "number" then exported = exported + res
-            elseif res == true then exported = exported + chunk
-            else last_err = tostring(res) end
-        else
-            last_err = tostring(res)
-            break
-        end
-        try_count = try_count + 1
-    end
-    
-    if exported < output_qty then
-        return true, last_err, exported
-    end
-    
-    return true, "OK", exported
+    return false
 end
 
 return me
