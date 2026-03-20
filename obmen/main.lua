@@ -100,11 +100,10 @@ local function refreshScreen()
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
         local list = (state == "admin_trades") and trades or loadLogsLocal()
         
-        -- ДИНАМИЧЕСКИЙ РАСЧЕТ ПАГИНАЦИИ ПОД РАЗМЕР ЭКРАНА
         local _, h = component.gpu.getResolution()
-        local max_rows = h - 15
         local isLogs = (state == "admin_logs")
-        local perPage = isLogs and max_rows or (max_rows * 2) -- Обмены в 2 колонки
+        -- Для обменов с отступами вмещается в 2 раза меньше
+        local perPage = isLogs and (h - 15) or math.floor((h - 15) / 2)
         
         local maxPage = math.ceil(#list / perPage); if maxPage < 1 then maxPage = 1 end
         adminMaxPage = maxPage
