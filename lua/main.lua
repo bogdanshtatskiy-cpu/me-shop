@@ -96,6 +96,27 @@ local function writeLog(action, user, details)
             network.request("POST", "/logs", json.encode({ time = time_str, action = action, user = user, details = details })) 
         end)
     end
+
+    -- === УМНАЯ АВТООЧИСТКА ЛОГОВ (Лимит 200 КБ) ===
+    local size = fs.size("/home/shop_logs.txt")
+    if size and size > 200000 then 
+        local lines = {}
+        local fr = io.open("/home/shop_logs.txt", "r")
+        if fr then
+            for line in fr:lines() do table.insert(lines, line) end
+            fr:close()
+        end
+        
+        local fw = io.open("/home/shop_logs.txt", "w")
+        if fw then
+            -- Оставляем только последние 200 записей, чтобы не забивать диск на 4МБ
+            local start_idx = math.max(1, #lines - 200)
+            for i = start_idx, #lines do
+                fw:write(lines[i] .. "\n")
+            end
+            fw:close()
+        end
+    end
 end
 
 local function loadLogsLocal(filter)
