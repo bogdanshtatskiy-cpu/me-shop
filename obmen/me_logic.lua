@@ -4,50 +4,47 @@ local sides = require("sides")
 
 local me = {}
 local transposer, inv_ctrl, db, me_bus
-local t_in, t_dump, a_out
+local a_out
 
--- Куда МЭ интерфейс должен выплевывать слитки (1 = вверх, прямо в сундук над ним)
-local ME_EXPORT = sides.up
+-- =========================================================
+-- ЖЕСТКИЕ НАСТРОЙКИ (ЛЕВАЯ ЧАСТЬ - ТРАНСПОУЗЕР)
+-- =========================================================
+-- МЭ интерфейс криво отдает свой размер, поэтому для Транспоузера стороны заданы жестко:
+local T_INPUT  = sides.up     -- Сундук с рудой СВЕРХУ от Транспоузера
+local T_DUMP   = sides.down   -- МЭ Интерфейс СНИЗУ от Транспоузера
+local ME_EXPORT = sides.up    -- МЭ Интерфейс выдачи выплевывает слитки ВВЕРХ
+-- =========================================================
 
 function me.init()
     if not component.isAvailable("transposer") then return false, "Транспоузер не подключен!" end
     transposer = component.transposer
     
-    if not component.isAvailable("inventory_controller") then return false, "Адаптер 1 (с Контроллером инв.) не подключен!" end
+    if not component.isAvailable("inventory_controller") then return false, "Адаптер 1 (Контроллер инв.) не подключен!" end
     inv_ctrl = component.inventory_controller
     
-    if not component.isAvailable("database") then return false, "Адаптер 2 (с Базой Данных) не подключен!" end
+    if not component.isAvailable("database") then return false, "Адаптер 2 (База Данных) не подключен!" end
     db = component.database
     
     if component.isAvailable("me_interface") then me_bus = component.me_interface
     elseif component.isAvailable("me_controller") then me_bus = component.me_controller
     else return false, "МЭ Интерфейс (для выдачи) не подключен!" end
     
-    -- УМНЫЙ АВТОПОИСК ДЛЯ ТРАНСПОУЗЕРА (ЛЕВАЯ ЧАСТЬ)
-    for s = 0, 5 do
-        local ok, sz = pcall(transposer.getInventorySize, s)
-        if ok and sz then
-            if sz >= 27 then t_in = s          -- Нашел огромный сундук руды
-            elseif sz > 0 then t_dump = s end  -- Нашел маленький инвентарь (МЭ Интерфейс)
-        end
-    end
-    
-    -- УМНЫЙ АВТОПОИСК ДЛЯ АДАПТЕРА 1 (ПРАВАЯ ЧАСТЬ)
+    -- Автопоиск ТОЛЬКО для Адаптера 1 (сундук со слитками)
     for s = 0, 5 do
         local ok, sz = pcall(inv_ctrl.getInventorySize, s)
-        -- Адаптер сам ищет, с какой стороны от него стоит сундук!
-        if ok and sz and sz >= 27 then a_out = s; break end 
+        if ok and sz and sz >= 27 then 
+            a_out = s
+            break 
+        end
     end
 
-    if not t_in then return false, "Транспоузер не видит входной сундук!" end
-    if not t_dump then return false, "Транспоузер не видит МЭ для сброса!" end
-    if not a_out then return false, "Контроллер инвентаря не видит выходной сундук!" end
+    if not a_out then return false, "Адаптер 1 не видит выходной сундук вплотную к себе!" end
     
     return true, "OK"
 end
 
 function me.getScanItems()
-    local in_stack = transposer.getStackInSlot(t_in, 1)
+    local in_stack = transposer.getStackInSlot(T_INPUT, 1)
     local out_stack = inv_ctrl.getStackInSlot(a_out, 1)
     return in_stack, out_stack
 end
@@ -58,10 +55,10 @@ end
 
 function me.getInputInventory()
     local inv = {}
-    local size = transposer.getInventorySize(t_in)
+    local size = transposer.getInventorySize(T_INPUT)
     if not size then return inv end
     for i = 1, size do
-        local stack = transposer.getStackInSlot(t_in, i)
+        local stack = transposer.getStackInSlot(T_INPUT, i)
         if stack then inv[i] = stack end
     end
     return inv
@@ -96,10 +93,8 @@ function me.updateStock(trades)
 end
 
 function me.processExchange(slot, input_qty, db_slot, output_qty)
-    -- 1. Скидываем руду
-    local pushed, err = transposer.transferItem(t_in, t_dump, input_qty, slot)
+    local pushed, err = transposer.transferItem(T_INPUT, T_DUMP, input_qty, slot)
     
-    -- ЖЕЛЕЗОБЕТОННЫЙ ФИКС ОШИБКИ "BOOLEAN WITH NUMBER"
     if type(pushed) == "boolean" and not pushed then
         return false, "МЭ интерфейс занят или переполнен"
     elseif type(pushed) == "number" and pushed < input_qty then
@@ -108,7 +103,6 @@ function me.processExchange(slot, input_qty, db_slot, output_qty)
         return false, "Сбой транспоузера"
     end
     
-    -- 2. Выдаем слитки
     local exported = 0
     local try_count = 0
     while exported < output_qty and try_count < 5 do
