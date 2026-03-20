@@ -6,10 +6,9 @@ local me = {}
 local transposer, inv_ctrl, db, me_bus
 local a_out
 
--- ЖЕСТКИЕ НАСТРОЙКИ СТОРОН
-local T_INPUT  = 1 -- ВВЕРХ (Сундук над транспоузером)
-local T_DUMP   = 0 -- ВНИЗ (МЭ Интерфейс под транспоузером)
-local ME_EXPORT = 1 -- ВВЕРХ (МЭ выдает слитки вверх в сундук)
+local T_INPUT  = 1 -- ВВЕРХ
+local T_DUMP   = 0 -- ВНИЗ
+local ME_EXPORT = 1 -- ВВЕРХ
 
 function me.init()
     if not component.isAvailable("transposer") then return false, "Транспоузер не подключен!" end
@@ -43,38 +42,6 @@ function me.storeToDB(db_slot)
     return inv_ctrl.store(a_out, 1, db.address, db_slot)
 end
 
-function me.getInputInventory()
-    local inv = {}
-    local size = transposer.getInventorySize(T_INPUT)
-    if not size then return inv end
-    
-    -- СУПЕР-БЫСТРОЕ СКАНИРОВАНИЕ (Убираем лаг в 5-10 секунд)
-    local ok, stacks = pcall(transposer.getAllStacks, T_INPUT)
-    if ok and stacks then
-        if type(stacks) == "table" and stacks.getAll then
-            local arr = stacks.getAll()
-            for i, stack in pairs(arr) do
-                if stack and stack.name then inv[i] = stack end
-            end
-            return inv
-        elseif type(stacks) == "function" then
-            local i = 1
-            for stack in stacks do
-                if stack and stack.name then inv[i] = stack end
-                i = i + 1
-            end
-            return inv
-        end
-    end
-    
-    -- Если супер-метод отключен на сервере, сканируем по старинке (медленно)
-    for i = 1, size do
-        local stack = transposer.getStackInSlot(T_INPUT, i)
-        if stack and stack.name then inv[i] = stack end
-    end
-    return inv
-end
-
 function me.getFreeSpace(target_name, target_dmg)
     local free = 0
     local size = inv_ctrl.getInventorySize(a_out)
@@ -103,12 +70,44 @@ function me.updateStock(trades)
     end
 end
 
-function me.processExchange(slot, input_qty, t_data, output_qty)
+-- НОВАЯ ЛОГИКА: ЧИТАЕМ СЛОТ ЗА СЛОТОМ И СРАЗУ ВЫДАЕМ
+function me.processOneExchange(trades)
+    local size = transposer.getInventorySize(T_INPUT)
+    if not size then return false end
+    
+    for slot = 1, size do
+        local item = transposer.getStackInSlot(T_INPUT, slot)
+        if item and item.name then
+            for _, t in ipairs(trades) do
+                if item.name == t.input.name and math.floor(item.damage or 0) == math.floor(t.input.damage or 0) then
+                    
+                    local max_out_from_me = math.floor(t.stock / t.ratio)
+                    local free_space = me.getFreeSpace(t.output.name, t.output.damage)
+                    local max_out_space = math.floor(free_space / t.ratio)
+                    local can_process = math.min(item.size, max_out_from_me, max_out_space)
+                    
+                    if can_process > 0 then
+                        local out_qty = can_process * t.ratio
+                        local ok, msg, actual_out = me.executeExchange(slot, can_process, t, out_qty)
+                        return true, ok, msg, actual_out, t, can_process
+                    end
+                end
+            end
+        end
+    end
+    return false -- Ничего не нашли/не обработали
+end
+
+function me.executeExchange(slot, input_qty, t_data, output_qty)
     local pushed = transposer.transferItem(T_INPUT, T_DUMP, input_qty, slot)
     
-    if type(pushed) == "boolean" and not pushed then return false, "МЭ занята", 0
-    elseif type(pushed) == "number" and pushed < input_qty then return false, "МЭ не приняло руду", 0
-    elseif not pushed then return false, "Сбой транспоузера", 0 end
+    if type(pushed) == "boolean" and not pushed then return false, "МЭ приема занята", 0
+    elseif type(pushed) == "number" and pushed < input_qty then return false, "МЭ не приняло всю руду", 0
+    elseif not pushed then return false, "Сбой транспоузера приема", 0 end
+    
+    -- БЕРЕМ ИДЕАЛЬНЫЙ СЛЕПОК ИЗ БАЗЫ ДАННЫХ
+    local fp = db.get(t_data.db_slot)
+    if not fp then return true, "Пустой слепок в БД! Пересоздайте обмен.", 0 end
     
     local exported = 0
     local try_count = 0
@@ -117,13 +116,8 @@ function me.processExchange(slot, input_qty, t_data, output_qty)
     while exported < output_qty and try_count < 5 do
         local chunk = math.min(output_qty - exported, 64)
         
-        -- ПОПЫТКА 1: Выдача по ID (Стандарт)
-        local ok, res = pcall(me_bus.exportItem, {name = t_data.output.name, damage = t_data.output.damage}, ME_EXPORT, chunk)
-        
-        -- ПОПЫТКА 2: Выдача по Базе Данных (Резерв)
-        if not ok then
-            ok, res = pcall(me_bus.exportItem, db.address, t_data.db_slot, chunk, ME_EXPORT)
-        end
+        -- Скармливаем МЭ интерфейсу идеальный слепок (fp)
+        local ok, res = pcall(me_bus.exportItem, fp, ME_EXPORT, chunk)
         
         if ok then
             if type(res) == "table" and res.size then exported = exported + res.size
@@ -138,7 +132,7 @@ function me.processExchange(slot, input_qty, t_data, output_qty)
     end
     
     if exported < output_qty then
-        return true, "МЭ выдало ошибку: " .. last_err, exported
+        return true, last_err, exported
     end
     
     return true, "OK", exported
