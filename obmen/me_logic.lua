@@ -7,12 +7,11 @@ local transposer, inv_ctrl, db, me_bus
 local a_out
 
 -- =========================================================
--- ЖЕСТКИЕ НАСТРОЙКИ (ЛЕВАЯ ЧАСТЬ - ТРАНСПОУЗЕР)
+-- ЖЕСТКИЕ НАСТРОЙКИ СТОРОН
 -- =========================================================
--- МЭ интерфейс криво отдает свой размер, поэтому для Транспоузера стороны заданы жестко:
-local T_INPUT  = sides.up     -- Сундук с рудой СВЕРХУ от Транспоузера
-local T_DUMP   = sides.down   -- МЭ Интерфейс СНИЗУ от Транспоузера
-local ME_EXPORT = sides.up    -- МЭ Интерфейс выдачи выплевывает слитки ВВЕРХ
+local T_INPUT  = 1 -- ВВЕРХ (Сундук над транспоузером)
+local T_DUMP   = 0 -- ВНИЗ (МЭ Интерфейс под транспоузером)
+local ME_EXPORT = 1 -- ВВЕРХ (МЭ Интерфейс выдает слитки вверх в сундук)
 -- =========================================================
 
 function me.init()
@@ -29,7 +28,7 @@ function me.init()
     elseif component.isAvailable("me_controller") then me_bus = component.me_controller
     else return false, "МЭ Интерфейс (для выдачи) не подключен!" end
     
-    -- Автопоиск ТОЛЬКО для Адаптера 1 (сундук со слитками)
+    -- Ищем сундук со слитками вокруг Адаптера
     for s = 0, 5 do
         local ok, sz = pcall(inv_ctrl.getInventorySize, s)
         if ok and sz and sz >= 27 then 
@@ -38,7 +37,7 @@ function me.init()
         end
     end
 
-    if not a_out then return false, "Адаптер 1 не видит выходной сундук вплотную к себе!" end
+    if not a_out then return false, "Адаптер 1 не видит выходной сундук!" end
     
     return true, "OK"
 end
@@ -93,12 +92,13 @@ function me.updateStock(trades)
 end
 
 function me.processExchange(slot, input_qty, db_slot, output_qty)
-    local pushed, err = transposer.transferItem(T_INPUT, T_DUMP, input_qty, slot)
+    local pushed = transposer.transferItem(T_INPUT, T_DUMP, input_qty, slot)
     
+    -- Бронебойная защита от багов Транспоузера
     if type(pushed) == "boolean" and not pushed then
-        return false, "МЭ интерфейс занят или переполнен"
+        return false, "МЭ интерфейс занят"
     elseif type(pushed) == "number" and pushed < input_qty then
-        return false, "МЭ интерфейс не принял всю руду"
+        return false, "МЭ не приняло всю руду"
     elseif not pushed then
         return false, "Сбой транспоузера"
     end
@@ -107,7 +107,7 @@ function me.processExchange(slot, input_qty, db_slot, output_qty)
     local try_count = 0
     while exported < output_qty and try_count < 5 do
         local chunk = math.min(output_qty - exported, 64)
-        local ok, err_msg = pcall(function()
+        local ok, err = pcall(function()
             me_bus.exportItem(db.address, db_slot, chunk, ME_EXPORT)
         end)
         if ok then exported = exported + chunk else break end
