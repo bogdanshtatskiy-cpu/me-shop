@@ -4,14 +4,14 @@ local sides = require("sides")
 
 local me = {}
 local transposer, inv_ctrl, db, me_bus
-local A_OUTPUT -- Это мы найдем автоматически (сторону сундука)
 
 -- =========================================================
--- ЖЕСТКИЕ НАСТРОЙКИ (ЛЕВАЯ ЧАСТЬ)
+-- ЖЕСТКИЕ НАСТРОЙКИ СТОРОН
 -- =========================================================
 local T_INPUT  = sides.up     -- Сундук с рудой СВЕРХУ от Транспоузера
 local T_DUMP   = sides.down   -- МЭ Интерфейс СНИЗУ от Транспоузера
-local ME_EXPORT = sides.up    -- МЭ Интерфейс выдачи выплевывает слитки ВВЕРХ
+local A_OUTPUT  = sides.up    -- Сундук со слитками СВЕРХУ от Адаптера 1
+local ME_EXPORT = sides.up    -- МЭ Интерфейс выплевывает слитки ВВЕРХ в сундук
 -- =========================================================
 
 function me.init()
@@ -27,18 +27,6 @@ function me.init()
     if component.isAvailable("me_interface") then me_bus = component.me_interface
     elseif component.isAvailable("me_controller") then me_bus = component.me_controller
     else return false, "МЭ Интерфейс (для выдачи) не подключен!" end
-    
-    -- БЕЗОПАСНЫЙ ПОИСК СУНДУКА ДЛЯ АДАПТЕРА 1
-    for s = 0, 5 do
-        local ok, sz = pcall(inv_ctrl.getInventorySize, s)
-        -- Если блок имеет инвентарь размером 27 или больше (как у сундука)
-        if ok and sz and sz >= 27 then 
-            A_OUTPUT = s
-            break
-        end
-    end
-
-    if not A_OUTPUT then return false, "Адаптер 1 не видит сундук вплотную к себе!" end
     
     return true, "OK"
 end
@@ -79,21 +67,31 @@ function me.getFreeSpace(target_name, target_dmg)
 end
 
 function me.updateStock(trades)
-    local items = me_bus.getItemsInNetwork()
-    local stock_map = {}
-    for _, item in ipairs(items) do
-        local key = item.name .. ":" .. math.floor(item.damage or 0)
-        stock_map[key] = (stock_map[key] or 0) + item.size
-    end
+    -- СУПЕР-ОПТИМИЗАЦИЯ: СПРАШИВАЕМ У МЭ ТОЛЬКО НУЖНЫЕ ПРЕДМЕТЫ
     for _, t in ipairs(trades) do
-        local key = t.output.name .. ":" .. math.floor(t.output.damage or 0)
-        t.stock = stock_map[key] or 0
+        t.stock = 0
+        local ok, items = pcall(me_bus.getItemsInNetwork, {name = t.output.name, damage = t.output.damage})
+        if ok and items then
+            for _, item in pairs(items) do
+                if type(item) == "table" and item.name == t.output.name then
+                    t.stock = t.stock + (item.size or 0)
+                end
+            end
+        end
     end
 end
 
 function me.processExchange(slot, input_qty, db_slot, output_qty)
     local pushed = transposer.transferItem(T_INPUT, T_DUMP, input_qty, slot)
-    if pushed < input_qty then return false, "Ошибка сброса руды" end
+    
+    -- ФИКС ОШИБКИ "BOOLEAN WITH NUMBER" И ЗАЩИТА ОТ КРАШЕЙ
+    if type(pushed) == "boolean" and pushed == false then
+        return false, "МЭ интерфейс занят или переполнен"
+    elseif type(pushed) == "number" and pushed < input_qty then
+        return false, "МЭ интерфейс не принял всю руду"
+    elseif type(pushed) == "nil" then
+        return false, "Сбой транспоузера"
+    end
     
     local exported = 0
     local try_count = 0
