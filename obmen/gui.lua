@@ -4,9 +4,16 @@ local term = require("term")
 local unicode = require("unicode")
 local gpu = component.gpu
 
--- АВТОМАТИЧЕСКИ ВКЛЮЧАЕМ МАКСИМАЛЬНОЕ РАЗРЕШЕНИЕ ДЛЯ ТВОЕГО ЭКРАНА!
+-- АДАПТАЦИЯ ПОД КВАДРАТНЫЙ 3х3 МОНИТОР
 local maxW, maxH = gpu.maxResolution()
-gpu.setResolution(maxW, maxH)
+-- Чтобы текст на квадратном мониторе не был сплюснутым,
+-- ширина в символах должна быть ровно в 2 раза больше высоты.
+local optW = maxH * 2
+if optW < maxW then
+    gpu.setResolution(optW, maxH)
+else
+    gpu.setResolution(maxW, maxH)
+end
 
 local gui = {}
 gui.buttons = {}
@@ -36,6 +43,7 @@ end
 
 function gui.drawMain(trades)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
+    
     rect(1, 1, W, 3, gui.COLORS.panel)
     center(1, 2, W, "АВТОМАТИЧЕСКИЙ ОБМЕННИК РУД", gui.COLORS.energy, gui.COLORS.panel)
     
@@ -45,37 +53,47 @@ function gui.drawMain(trades)
     if #trades == 0 then 
         text(4, 7, "Обменов пока нет...", gui.COLORS.label, gui.COLORS.bg)
     else
-        -- КОМПАКТНЫЙ ДИЗАЙН В 2 КОЛОНКИ
-        local col_w = math.floor((W - 8) / 2)
+        -- ДИНАМИЧЕСКАЯ СЕТКА НА ВЕСЬ ЭКРАН (2 или 3 колонки)
+        local num_cols = (W >= 90) and 3 or 2
+        local rows_per_col = math.ceil(#trades / num_cols)
+        
         local start_y = 7
-        local max_rows = H - start_y - 1
+        local avail_h = H - start_y - 1
+        
+        -- Высчитываем отступ между строками, чтобы заполнить высоту экрана
+        local y_step = math.floor(avail_h / rows_per_col)
+        if y_step < 1 then y_step = 1 end
+        if y_step > 3 then y_step = 3 end -- Не делаем блоки слишком "жирными"
+        
+        local box_h = (y_step > 1) and (y_step - 1) or 1
+        local col_w = math.floor((W - 6) / num_cols)
         
         for i, t in ipairs(trades) do
-            local col = math.floor((i - 1) / max_rows)
-            local row = (i - 1) % max_rows
-            local x = 4 + col * col_w
-            local y = start_y + row
+            local col = math.floor((i - 1) / rows_per_col)
+            local row = (i - 1) % rows_per_col
             
-            if col > 1 then break end -- Защита: не больше 2 колонок
+            local x = 3 + col * col_w
+            local y = start_y + row * y_step
             
-            -- Зебра (чередование цветов строк для красоты)
-            local bg = (row % 2 == 0) and gui.COLORS.tileBg or gui.COLORS.bg
-            rect(x, y, col_w - 1, 1, bg)
+            -- Рисуем фон карточки обмена
+            local bg = (i % 2 == 0) and gui.COLORS.tileBg or gui.COLORS.panel
+            rect(x, y, col_w - 2, box_h, bg)
             
-            local max_name_len = math.floor(col_w * 0.32)
+            -- Центрируем текст по вертикали внутри блока
+            local text_y = y + math.floor((box_h - 1) / 2)
+            
+            -- Обрезаем слишком длинные названия модовых руд
+            local max_name_len = math.floor(col_w * 0.35)
             local in_name = unicode.sub(t.in_label, 1, max_name_len)
             local out_name = unicode.sub(t.out_label, 1, max_name_len)
             
-            -- Вход
-            text(x + 1, y, in_name, gui.COLORS.warn, bg)
-            -- Значок стрелки
-            text(x + 2 + unicode.len(in_name), y, "»", gui.COLORS.label, bg)
-            -- Выход
+            text(x + 2, text_y, in_name, gui.COLORS.warn, bg)
+            text(x + 3 + unicode.len(in_name), text_y, "»", gui.COLORS.label, bg)
             local out_str = out_name .. " x" .. t.ratio
-            text(x + 4 + unicode.len(in_name), y, out_str, gui.COLORS.good, bg)
-            -- Склад
+            text(x + 5 + unicode.len(in_name), text_y, out_str, gui.COLORS.good, bg)
+            
             local stock_str = "[" .. tostring(t.stock or 0) .. "]"
-            text(x + col_w - 1 - unicode.len(stock_str), y, stock_str, gui.COLORS.text, bg)
+            text(x + col_w - 3 - unicode.len(stock_str), text_y, stock_str, gui.COLORS.text, bg)
         end
     end
 end
@@ -119,27 +137,34 @@ function gui.drawAdmin(substate, items, page, maxPage)
                 end
             end
         else
-            -- КОМПАКТНЫЙ ВИД ОБМЕНОВ В АДМИНКЕ (Тоже 2 колонки)
-            local col_w = math.floor((W - 12) / 2)
-            local max_rows = H - 15
+            -- КОМПАКТНЫЙ ВИД АДМИНКИ (2 или 3 колонки)
+            local num_cols = (W >= 90) and 3 or 2
+            local rows_per_col = math.ceil(#items / num_cols)
+            if rows_per_col < 1 then rows_per_col = 1 end
+            
+            local y_step = math.floor((H - 15) / rows_per_col)
+            if y_step < 1 then y_step = 1 end
+            if y_step > 2 then y_step = 2 end
+            
+            local col_w = math.floor((W - 12) / num_cols)
             
             for i, el in ipairs(items) do
-                local col = math.floor((i - 1) / max_rows)
-                local row = (i - 1) % max_rows
+                local col = math.floor((i - 1) / rows_per_col)
+                local row = (i - 1) % rows_per_col
                 local x = 6 + col * col_w
-                local yy = 10 + row
+                local yy = 10 + row * y_step
                 
-                local bg = (row % 2 == 0) and gui.COLORS.tileBg or gui.COLORS.panel
+                local bg = (i % 2 == 0) and gui.COLORS.tileBg or gui.COLORS.panel
                 rect(x, yy, col_w - 1, 1, bg)
                 
-                local in_name = unicode.sub(el.item.in_label, 1, math.floor(col_w * 0.3))
-                local out_name = unicode.sub(el.item.out_label, 1, math.floor(col_w * 0.3))
+                local max_len = math.floor(col_w * 0.3)
+                local in_name = unicode.sub(el.item.in_label, 1, max_len)
+                local out_name = unicode.sub(el.item.out_label, 1, max_len)
                 
                 text(x + 1, yy, in_name, gui.COLORS.warn, bg)
                 text(x + 2 + unicode.len(in_name), yy, "»", gui.COLORS.label, bg)
                 text(x + 4 + unicode.len(in_name), yy, out_name .. " x" .. el.item.ratio, gui.COLORS.text, bg)
                 
-                -- Мини-кнопка удаления
                 gui.btn("adm_del_"..el.origIdx, x + col_w - 9, yy, 8, 1, " УДАЛ ", gui.COLORS.bad)
             end
         end
