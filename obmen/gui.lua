@@ -4,14 +4,9 @@ local term = require("term")
 local unicode = require("unicode")
 local gpu = component.gpu
 
--- Адаптация пропорций под квадратный экран
 local maxW, maxH = gpu.maxResolution()
 local optW = maxH * 2
-if optW < maxW then
-    gpu.setResolution(optW, maxH)
-else
-    gpu.setResolution(maxW, maxH)
-end
+if optW < maxW then gpu.setResolution(optW, maxH) else gpu.setResolution(maxW, maxH) end
 
 local gui = {}
 gui.buttons = {}
@@ -39,23 +34,28 @@ function gui.btn(id, x, y, w, h, str, bg, fg)
     gui.buttons[id] = {x=x, y=y, w=w, h=h} 
 end
 
-function gui.drawMain(trades)
+function gui.drawMain(trades, isChestFull)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     
     rect(1, 1, W, 3, gui.COLORS.panel)
     center(1, 2, W, "АВТОМАТИЧЕСКИЙ ОБМЕННИК РУД", gui.COLORS.energy, gui.COLORS.panel)
     
     gui.btn("admin_login", W - 14, 2, 12, 1, "АДМИН", gui.COLORS.btn)
-    text(4, 5, "ДОСТУПНЫЕ ОБМЕНЫ (Просто положите руду в левый сундук):", gui.COLORS.warn, gui.COLORS.bg)
+    
+    -- УМНЫЙ БАННЕР ПЕРЕПОЛНЕНИЯ
+    if isChestFull then
+        center(1, 5, W, " ВНИМАНИЕ: СУНДУК ВЫДАЧИ ПЕРЕПОЛНЕН! ОСВОБОДИТЕ МЕСТО! ", gui.COLORS.text, gui.COLORS.bad)
+    else
+        text(4, 5, "ДОСТУПНЫЕ ОБМЕНЫ (Просто положите руду в левый сундук):", gui.COLORS.warn, gui.COLORS.bg)
+    end
     
     if #trades == 0 then 
         text(4, 7, "Обменов пока нет...", gui.COLORS.label, gui.COLORS.bg)
     else
         local y = 7
         for i, t in ipairs(trades) do
-            if y > H - 2 then break end -- Защита от вылезания за экран
+            if y > H - 2 then break end 
             
-            -- Подсветка строки (Зебра)
             local bg = (i % 2 == 0) and gui.COLORS.tileBg or gui.COLORS.panel
             rect(4, y, W - 8, 1, bg)
             
@@ -63,16 +63,11 @@ function gui.drawMain(trades)
             local out_str = t.out_label .. " x" .. t.ratio
             local stock_str = "[На складе: " .. tostring(t.stock or 0) .. "]"
             
-            -- Вход
             text(6, y, in_str, gui.COLORS.warn, bg)
-            -- Стрелка
             text(6 + unicode.len(in_str) + 2, y, "»", gui.COLORS.label, bg)
-            -- Выход
             text(6 + unicode.len(in_str) + 5, y, out_str, gui.COLORS.good, bg)
-            -- Склад (Прижат к правому краю)
             text(W - 4 - unicode.len(stock_str), y, stock_str, gui.COLORS.text, bg)
             
-            -- ШАГ В 2 СТРОКИ (1 строка текста + 1 пустая строка отступа)
             y = y + 2 
         end
     end
@@ -117,7 +112,6 @@ function gui.drawAdmin(substate, items, page, maxPage)
                 end
             end
         else
-            -- КЛАССИЧЕСКИЙ ВИД АДМИНКИ С ОТСТУПАМИ
             local y = 10
             for i, el in ipairs(items) do
                 if y > H - 6 then break end
@@ -132,10 +126,9 @@ function gui.drawAdmin(substate, items, page, maxPage)
                 text(8 + unicode.len(in_str) + 2, y, "»", gui.COLORS.label, bg)
                 text(8 + unicode.len(in_str) + 5, y, out_str, gui.COLORS.text, bg)
                 
-                -- Кнопка удалить
                 gui.btn("adm_del_"..el.origIdx, W - 18, y, 10, 1, "УДАЛИТЬ", gui.COLORS.bad)
                 
-                y = y + 2 -- Отступ
+                y = y + 2
             end
         end
     end
