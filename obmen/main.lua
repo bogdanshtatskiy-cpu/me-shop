@@ -110,37 +110,6 @@ local function refreshScreen()
     end
 end
 
-local function processExchanges()
-    local inv = me.getInputInventory()
-    for slot, item in pairs(inv) do
-        for _, t in ipairs(trades) do
-            if item.name == t.input.name and math.floor(item.damage or 0) == math.floor(t.input.damage or 0) then
-                local max_out_from_me = math.floor(t.stock / t.ratio)
-                local free_space = me.getFreeSpace(t.output.name, t.output.damage)
-                local max_out_space = math.floor(free_space / t.ratio)
-                local can_process_input = math.min(item.size, max_out_from_me, max_out_space)
-                
-                if can_process_input > 0 then
-                    local out_qty = can_process_input * t.ratio
-                    
-                    -- ОБНОВЛЕННАЯ ЛОГИКА С ПРОВЕРКОЙ ОШИБОК
-                    local ok, msg, actual_out = me.processExchange(slot, can_process_input, t, out_qty)
-                    if ok then
-                        t.stock = t.stock - actual_out
-                        if actual_out == out_qty then
-                            writeLog("ОБМЕН", string.format("%d %s -> %d %s", can_process_input, t.in_label, actual_out, t.out_label))
-                        else
-                            writeLog("ОШИБКА ВЫДАЧИ", string.format("Взято %d %s, выдано %d %s. Ошибка: %s", can_process_input, t.in_label, actual_out, t.out_label, msg))
-                        end
-                        refreshScreen()
-                    end
-                end
-                break
-            end
-        end
-    end
-end
-
 loadTrades()
 if me_ok then pcall(me.updateStock, trades) end
 refreshScreen()
@@ -156,7 +125,22 @@ while true do
         if state == "main" and me_ok then
             tickTimer = tickTimer + 0.1
             if tickTimer >= 1.0 then 
-                tickTimer = 0; processExchanges() 
+                tickTimer = 0
+                -- ПРОВЕРЯЕМ СЛОТ ЗА СЛОТОМ!
+                local found, ok, msg, actual_out, t, input_qty = me.processOneExchange(trades)
+                if found then
+                    if ok then
+                        t.stock = t.stock - actual_out
+                        if actual_out == (input_qty * t.ratio) then
+                            writeLog("ОБМЕН", string.format("%d %s -> %d %s", input_qty, t.in_label, actual_out, t.out_label))
+                        else
+                            writeLog("ОШИБКА ВЫДАЧИ", string.format("Взято %d %s, выдано %d %s. Ошибка МЭ: %s", input_qty, t.in_label, actual_out, t.out_label, msg))
+                        end
+                    else
+                        writeLog("СБОЙ", string.format("Отмена для %s: %s", t.in_label, msg))
+                    end
+                    refreshScreen()
+                end
             end
             
             stockTimer = stockTimer + 0.1
