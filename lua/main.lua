@@ -12,6 +12,9 @@ local me = require("me_logic")
 local network = require("network")
 local json = require("json")
 
+-- === ОТКЛЮЧАЕМ БЕЗУСЛОВНОЕ ЗАКРЫТИЕ НА CTRL+ALT+C ===
+event.shouldInterrupt = function() return false end
+
 local me_ok, me_msg = me.init()
 local CUR = config.currency_name or "ЭМ"
 
@@ -109,7 +112,6 @@ local function writeLog(action, user, details)
         
         local fw = io.open("/home/shop_logs.txt", "w")
         if fw then
-            -- Оставляем только последние 200 записей, чтобы не забивать диск на 4МБ
             local start_idx = math.max(1, #lines - 200)
             for i = start_idx, #lines do
                 fw:write(lines[i] .. "\n")
@@ -275,7 +277,7 @@ local function refreshScreen()
         elseif state == "admin_buy" then listToPass = shop_buyback
         elseif state == "admin_logs" then 
             listToPass = loadLogsLocal(log_filter)
-            perPage = 30 -- Изменили на 30 по твоей просьбе
+            perPage = 30
         end
         
         local pItems, maxP = getAdminPageItems(listToPass, perPage)
@@ -351,7 +353,19 @@ while true do
     else
         if currentUser then idleTimer = 30 end
 
-        if ev == "key_down" and state == "editor" then
+        -- === ПЕРЕХВАТЧИК ЗАКРЫТИЯ ПРИЛОЖЕНИЯ ===
+        if ev == "interrupted" then
+            if currentUser and currentUser.isAdmin then
+                component.gpu.setBackground(0x000000)
+                component.gpu.setForeground(0xFFFFFF)
+                require("term").clear()
+                print("Программа завершена администратором: " .. currentUser.name)
+                os.exit()
+            else
+                showMsg("ОТКАЗАНО В ДОСТУПЕ", "Только администратор может закрыть программу!", true, 3)
+            end
+            
+        elseif ev == "key_down" and state == "editor" then
             local char = arg1; local code = arg2
             local val = (ed_data.focus == "name") and ed_data.name or tostring(ed_data.price)
             if code == 14 then
