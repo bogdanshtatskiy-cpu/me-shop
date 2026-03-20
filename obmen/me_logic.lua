@@ -54,7 +54,6 @@ function me.init()
         for _, c in ipairs(chests) do if c.address == addr then output_chest = c break end end
     end
 
-    -- АВТО-ВОССТАНОВЛЕНИЕ: Если знаем один сундук, вычисляем второй
     if not input_chest and output_chest and #chests == 2 then
         for _, c in ipairs(chests) do
             if c.address ~= output_chest.address then
@@ -155,7 +154,6 @@ function me.getFreeSpace(target_id, target_dmg)
     local size = inv_ctrl.getInventorySize(a_out)
     if not size then return 0 end
     
-    -- БЫСТРЫЙ МЕТОД: Если мы точно знаем правый сундук
     if output_chest then
         local ok, stacks = pcall(output_chest.getAllStacks, 0)
         if ok and type(stacks) == "table" then
@@ -173,7 +171,6 @@ function me.getFreeSpace(target_id, target_dmg)
         end
     end
 
-    -- РЕЗЕРВНЫЙ МЕТОД: Если потеряли сундук, используем Контроллер
     local free = 0
     for i = 1, size do
         local stack = inv_ctrl.getStackInSlot(a_out, i)
@@ -184,6 +181,32 @@ function me.getFreeSpace(target_id, target_dmg)
         end
     end
     return free
+end
+
+-- НОВАЯ ФУНКЦИЯ ДЛЯ БАННЕРА: Проверяет, забит ли сундук на 100%
+function me.isOutputChestFull()
+    if not inv_ctrl or not a_out then return false end
+    local size = inv_ctrl.getInventorySize(a_out)
+    if not size then return false end
+    
+    if output_chest then
+        local ok, stacks = pcall(output_chest.getAllStacks, 0)
+        if ok and type(stacks) == "table" then
+            local free_slots = 0
+            for i = 1, size do
+                if not stacks[i] or not stacks[i].id then
+                    free_slots = free_slots + 1
+                end
+            end
+            return free_slots == 0
+        end
+    end
+
+    local free_slots = 0
+    for i = 1, size do
+        if not inv_ctrl.getStackInSlot(a_out, i) then free_slots = free_slots + 1 end
+    end
+    return free_slots == 0
 end
 
 function me.updateStock(trades)
@@ -201,9 +224,7 @@ function me.updateStock(trades)
 end
 
 function me.processOneExchange(trades)
-    if not input_chest then 
-        return false 
-    end
+    if not input_chest then return false end
 
     local ok, stacks = pcall(input_chest.getAllStacks, 0)
     if not ok or type(stacks) ~= "table" then return false end
@@ -226,7 +247,6 @@ function me.processOneExchange(trades)
             
             local max_ore_we_can_process = math.min(total_ore, max_out_from_me, max_out_space)
 
-            -- ЕСЛИ НЕ МОЖЕМ ОБМЕНЯТЬ, СРАЗУ ГОВОРИМ ПОЧЕМУ
             if max_ore_we_can_process <= 0 then
                 local reason = ""
                 if max_out_from_me <= 0 then reason = "В МЭ нет слитков (" .. t.stock .. " шт)"
