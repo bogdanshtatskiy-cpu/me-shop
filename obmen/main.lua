@@ -18,7 +18,6 @@ local ed_data = {}
 local adminPage = 1
 local isAdminMode = false
 
--- КАЛЕНДАРЬ
 local function formatUnixTime(unix)
     local z = math.floor(unix / 86400) + 719468
     local era = math.floor((z >= 0 and z or (z - 146096)) / 146097)
@@ -92,8 +91,7 @@ local function getNextDbSlot()
 end
 
 local function refreshScreen()
-    if state == "main" then 
-        gui.drawMain(trades)
+    if state == "main" then gui.drawMain(trades)
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
         local list = (state == "admin_trades") and trades or loadLogsLocal()
         local maxPage = math.ceil(#list / 17); if maxPage < 1 then maxPage = 1 end
@@ -146,24 +144,24 @@ local tickTimer = 0
 local stockTimer = 0
 
 while true do
-    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.5) -- Ждем полсекунды (быстрый отклик кнопок)
+    -- Снизили задержку до 0.1 сек. Теперь кнопки нажимаются МГНОВЕННО!
+    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.1)
     
     if not ev then 
-        -- ФОНОВАЯ РАБОТА
         if state == "main" and me_ok then
-            tickTimer = tickTimer + 1
-            if tickTimer >= 2 then 
+            tickTimer = tickTimer + 0.1
+            if tickTimer >= 1.0 then 
                 tickTimer = 0; processExchanges() 
             end
-            stockTimer = stockTimer + 1
-            if stockTimer >= 10 then -- Раз в 5 секунд обновляем цифры из МЭ сети
+            
+            stockTimer = stockTimer + 0.1
+            if stockTimer >= 5.0 then -- Раз в 5 секунд обновляем цифры на экране (МГНОВЕННО)
                 stockTimer = 0
                 pcall(me.updateStock, trades)
                 refreshScreen() 
             end
         end
     else
-        -- ОБРАБОТКА НАЖАТИЙ (РАБОТАЕТ МОМЕНТАЛЬНО)
         if ev == "touch" then
             local action = gui.checkClick(arg1, arg2)
             if action then
