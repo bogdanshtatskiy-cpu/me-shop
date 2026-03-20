@@ -112,12 +112,12 @@ local tickTimer = 0
 local stockTimer = 0
 
 while true do
-    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.1)
+    local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.05) -- Обновляем события еще быстрее
     
     if not ev then 
         if state == "main" and me_ok then
-            tickTimer = tickTimer + 0.1
-            if tickTimer >= 1.0 then 
+            tickTimer = tickTimer + 0.05
+            if tickTimer >= 0.1 then -- ПОЧТИ МГНОВЕННОЕ ЗАБИРАНИЕ РУДЫ (10 раз в секунду)
                 tickTimer = 0
                 local found, ok, msg, actual_out, t, input_qty = me.processOneExchange(trades)
                 if found then
@@ -135,7 +135,7 @@ while true do
                 end
             end
             
-            stockTimer = stockTimer + 0.1
+            stockTimer = stockTimer + 0.05
             if stockTimer >= 5.0 then
                 stockTimer = 0
                 pcall(me.updateStock, trades)
