@@ -4,7 +4,7 @@ local os = require("os")
 
 local me = {}
 local input_chest, me_bus, db, inv_ctrl
-local a_out -- Сторона правого сундука для Контроллера Инвентаря
+local a_out 
 
 function me.init()
     db = component.database
@@ -25,7 +25,6 @@ function me.init()
     if not input_chest then return false, "Адаптер 1 не видит ЛЕВЫЙ сундук!" end
     if not me_bus then return false, "Адаптер 2 не видит ПРАВЫЙ МЭ Интерфейс!" end
 
-    -- Ищем правый сундук вокруг Адаптера 3
     for s = 0, 5 do
         local ok, sz = pcall(inv_ctrl.getInventorySize, s)
         if ok and sz and sz >= 27 then 
@@ -39,19 +38,40 @@ function me.init()
 end
 
 function me.getScanItems()
-    local ok, stacks = pcall(input_chest.getAllStacks, 0)
-    if not ok or type(stacks) ~= "table" then return nil, nil end
-
-    local function formatItem(data)
-        if type(data) ~= "table" or not data.id then return nil end
-        return {
-            name = data.id,
-            damage = data.dmg or 0,
-            label = data.display_name or data.displayName or data.id
-        }
+    -- Ищем РУДУ в левом сундуке (первый найденный предмет)
+    local ok1, stacks = pcall(input_chest.getAllStacks, 0)
+    local in_item = nil
+    if ok1 and type(stacks) == "table" then
+        for _, data in pairs(stacks) do
+            if type(data) == "table" and data.id then
+                in_item = {
+                    name = data.id,
+                    damage = data.dmg or 0,
+                    label = data.display_name or data.displayName or data.id
+                }
+                break
+            end
+        end
     end
 
-    return formatItem(stacks[1]), formatItem(stacks[2])
+    -- Ищем СЛИТОК в правом сундуке (первый найденный предмет)
+    local out_item = nil
+    local size = inv_ctrl.getInventorySize(a_out)
+    if size then
+        for i = 1, size do
+            local stack = inv_ctrl.getStackInSlot(a_out, i)
+            if stack and stack.name then
+                out_item = {
+                    name = stack.name,
+                    damage = math.floor(stack.damage or 0),
+                    label = stack.label or stack.name
+                }
+                break
+            end
+        end
+    end
+
+    return in_item, out_item
 end
 
 function me.getFreeSpace(target_id, target_dmg)
@@ -61,7 +81,7 @@ function me.getFreeSpace(target_id, target_dmg)
     for i = 1, size do
         local stack = inv_ctrl.getStackInSlot(a_out, i)
         if not stack then 
-            free = free + 64 -- Если слот пустой, считаем что влезет 64
+            free = free + 64
         elseif stack.name == target_id and math.floor(stack.damage or 0) == math.floor(target_dmg or 0) then
             free = free + (stack.maxSize - stack.size)
         end
@@ -93,12 +113,9 @@ function me.processOneExchange(trades)
                 if data.id == t.input.name and (data.dmg or 0) == (t.input.damage or 0) then
                     
                     local max_out_from_me = math.floor(t.stock / t.ratio)
-                    
-                    -- ПРОВЕРЯЕМ СВОБОДНОЕ МЕСТО В ПРАВОМ СУНДУКЕ
                     local free_space = me.getFreeSpace(t.output.name, t.output.damage)
                     local max_out_space = math.floor(free_space / t.ratio)
                     
-                    -- Берем руды ровно столько, сколько влезет слитков в сундук и сколько есть в МЭ
                     local can_process = math.min(data.qty or data.size, max_out_from_me, max_out_space)
 
                     if can_process > 0 then
@@ -119,7 +136,7 @@ function me.processOneExchange(trades)
 
                                 if dropcount and dropcount > 0 then
                                     drop = drop + dropcount
-                                    try_count = 0 -- Сбрасываем попытки, если процесс идет
+                                    try_count = 0 
                                 else
                                     os.sleep(0.1)
                                     try_count = try_count + 1
