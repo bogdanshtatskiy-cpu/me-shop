@@ -83,13 +83,6 @@ local function saveTrades()
     if f then f:write(serialization.serialize(trades)); f:close() end
 end
 
-local function getNextDbSlot()
-    local used = {}
-    for _, t in ipairs(trades) do used[t.db_slot] = true end
-    for i = 1, 81 do if not used[i] then return i end end
-    return 1
-end
-
 local function refreshScreen()
     if state == "main" then gui.drawMain(trades)
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
@@ -126,7 +119,6 @@ while true do
             tickTimer = tickTimer + 0.1
             if tickTimer >= 1.0 then 
                 tickTimer = 0
-                -- ПРОВЕРЯЕМ СЛОТ ЗА СЛОТОМ!
                 local found, ok, msg, actual_out, t, input_qty = me.processOneExchange(trades)
                 if found then
                     if ok then
@@ -134,7 +126,7 @@ while true do
                         if actual_out == (input_qty * t.ratio) then
                             writeLog("ОБМЕН", string.format("%d %s -> %d %s", input_qty, t.in_label, actual_out, t.out_label))
                         else
-                            writeLog("ОШИБКА ВЫДАЧИ", string.format("Взято %d %s, выдано %d %s. Ошибка МЭ: %s", input_qty, t.in_label, actual_out, t.out_label, msg))
+                            writeLog("ВНИМАНИЕ", string.format("Взято %d %s, выдано %d %s. %s", input_qty, t.in_label, actual_out, t.out_label, msg))
                         end
                     else
                         writeLog("СБОЙ", string.format("Отмена для %s: %s", t.in_label, msg))
@@ -167,14 +159,14 @@ while true do
                 elseif action == "adm_logs" then state = "admin_logs"; adminPage = 1; refreshScreen()
                 
                 elseif action == "adm_add" then
-                    ed_data = {title="СКАНИРОВАНИЕ", msg="Положите руду в ЛЕВЫЙ и слиток в ПРАВЫЙ сундук", err=false}
+                    ed_data = {title="СКАНИРОВАНИЕ", msg="Положите руду в 1 СЛОТ, а слиток - во 2 СЛОТ левого сундука", err=false}
                     state = "admin_wait_scan"; refreshScreen()
                 
                 elseif action == "close_modal" then
                     if state == "admin_wait_scan" then
                         local in_st, out_st = me.getScanItems()
-                        if not in_st then ed_data = {title="ОШИБКА", msg="Во входном сундуке пусто!", err=true}; state = "modal_msg"
-                        elseif not out_st then ed_data = {title="ОШИБКА", msg="В выходном сундуке пусто!", err=true}; state = "modal_msg"
+                        if not in_st then ed_data = {title="ОШИБКА", msg="В 1 слоте нет руды!", err=true}; state = "modal_msg"
+                        elseif not out_st then ed_data = {title="ОШИБКА", msg="Во 2 слоте нет слитка!", err=true}; state = "modal_msg"
                         else
                             ed_data = {
                                 input = {name = in_st.name, damage = in_st.damage},
@@ -195,11 +187,8 @@ while true do
                         local r = tonumber(ed_data.ratio)
                         if not r or r <= 0 then ed_data={title="ОШИБКА", msg="Укажите корректное число!", err=true}; state="modal_msg"
                         else
-                            local dbslot = getNextDbSlot()
-                            if me.storeToDB(dbslot) then
-                                table.insert(trades, {input=ed_data.input, output=ed_data.output, in_label=ed_data.in_label, out_label=ed_data.out_label, ratio=r, stock=0, db_slot=dbslot})
-                                saveTrades(); pcall(me.updateStock, trades); state = "admin_trades"
-                            else ed_data={title="ОШИБКА БД", msg="Не удалось сохранить слепок в Базу Данных!", err=true}; state="modal_msg" end
+                            table.insert(trades, {input=ed_data.input, output=ed_data.output, in_label=ed_data.in_label, out_label=ed_data.out_label, ratio=r, stock=0})
+                            saveTrades(); pcall(me.updateStock, trades); state = "admin_trades"
                         end
                         refreshScreen()
                     end
