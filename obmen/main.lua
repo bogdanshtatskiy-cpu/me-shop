@@ -165,8 +165,8 @@ while true do
                 elseif action == "close_modal" then
                     if state == "admin_wait_scan" then
                         local in_st, out_st = me.getScanItems()
-                        if not in_st then ed_data = {title="ОШИБКА", msg="В левом сундуке пусто!", err=true}; state = "modal_msg"
-                        elseif not out_st then ed_data = {title="ОШИБКА", msg="В правом сундуке пусто!", err=true}; state = "modal_msg"
+                        if not out_st then ed_data = {title="ОШИБКА", msg="В ПРАВОМ сундуке нет слитка!", err=true}; state = "modal_msg"
+                        elseif not in_st then ed_data = {title="ОШИБКА", msg="В ЛЕВОМ сундуке нет руды!", err=true}; state = "modal_msg"
                         else
                             ed_data = {
                                 input = {name = in_st.name, damage = in_st.damage},
