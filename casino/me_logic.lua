@@ -107,9 +107,12 @@ end
 
 -- Выдача призов
 function me.givePrize(item_id, item_damage, qty)
+    -- ИСПРАВЛЕНО ТУТ: Теперь мы передаем все возможные варианты названия для надежности
     local perfect_fingerprint = {
-        id = item_id, -- ИСПРАВЛЕНО: Вернули ключ id, он критически важен для AE2
-        damage = math.floor(item_damage or 0)
+        id = item_id,
+        name = item_id,
+        damage = math.floor(item_damage or 0),
+        dmg = math.floor(item_damage or 0)
     }
     
     local total_moved = 0
