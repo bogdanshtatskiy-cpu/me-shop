@@ -468,9 +468,9 @@ function gui.drawRoulette(strip, strip_pos)
         local rarity_color = gui.COLORS.label
         local rarity_text = "ОБЫЧНЫЙ"
         
-        if item.chance < 5 then rarity_color = config.rarity_colors.super_rare; rarity_text = "★ СУПЕР ★"
-        elseif item.chance < 20 then rarity_color = config.rarity_colors.rare; rarity_text = "РЕДКИЙ"
-        elseif item.chance < 60 then rarity_color = config.rarity_colors.uncommon; rarity_text = "НЕОБЫЧ."
+        if item.chance < 5 then rarity_color = config.rarity_colors.super_rare; rarity_text = "***СУПЕР***"
+        elseif item.chance < 20 then rarity_color = config.rarity_colors.rare; rarity_text = "**РЕДКИЙ**"
+        elseif item.chance < 60 then rarity_color = config.rarity_colors.uncommon; rarity_text = "*НЕОБЫЧНЫЙ*"
         elseif item.chance < 80 then rarity_color = config.rarity_colors.common; rarity_text = "ОБЫЧНЫЙ"
         else rarity_color = config.rarity_colors.trash; rarity_text = "ШИРПОТРЕБ" end
 
