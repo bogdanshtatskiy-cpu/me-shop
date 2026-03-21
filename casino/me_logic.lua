@@ -101,7 +101,7 @@ function me.peekInput()
 end
 
 -- =========================================================
--- УНИВЕРСАЛЬНАЯ ВЫДАЧА (Живые объекты AE2)
+-- УНИВЕРСАЛЬНАЯ ВЫДАЧА (Защита от мусора + Живые объекты)
 -- =========================================================
 function me.givePrize(item_id, item_damage, qty)
     if not item_id or item_id == "" then
@@ -120,25 +120,26 @@ function me.givePrize(item_id, item_damage, qty)
         
         -- Получаем ЖИВЫЕ объекты из МЭ сети
         local ok_s, items = pcall(me_proxy.getItemsInNetwork, { name = item_id })
-        if not ok_s or not items or #items == 0 then
+        if not ok_s or not items or type(items) ~= "table" then
             ok_s, items = pcall(me_proxy.getItemsInNetwork, { id = item_id })
         end
         
         if ok_s and type(items) == "table" then
             for _, item in pairs(items) do
-                local current_name = item.name or item.id or ""
-                -- Строго проверяем совпадение ID и Урона (защита Солнечных панелей)
-                if current_name == item_id and math.floor(item.damage or 0) == item_damage_num then
-                    -- ХИРУРГИЧЕСКОЕ ВМЕШАТЕЛЬСТВО:
-                    -- Мы не копируем таблицу. Мы просто аккуратно добавляем id прямо в живой объект.
-                    -- Если таблица защищена от записи, pcall нас спасет.
-                    pcall(function() item.id = item.id or item.name end)
-                    table.insert(matching_items, item)
+                -- ЗАЩИТА: Проверяем, что item это таблица, а не скрытое системное число
+                if type(item) == "table" then
+                    local current_name = item.name or item.id or ""
+                    -- Строго проверяем совпадение ID и Урона
+                    if current_name == item_id and math.floor(item.damage or 0) == item_damage_num then
+                        -- Аккуратно добавляем id прямо в живой объект
+                        pcall(function() item.id = item.id or item.name end)
+                        table.insert(matching_items, item)
+                    end
                 end
             end
         end
         
-        -- Если МЭ сеть временно пустая или предмет самый обычный, добавляем резервный чистый слепок
+        -- Если МЭ сеть временно пустая или предмет обычный, добавляем резервный чистый слепок
         if #matching_items == 0 then
             table.insert(matching_items, { id = item_id, name = item_id, damage = item_damage_num })
         end
@@ -148,7 +149,6 @@ function me.givePrize(item_id, item_damage, qty)
 
         for _, dir in ipairs(directions) do
             for _, fp in ipairs(matching_items) do
-                -- Отправляем живой объект со всеми скрытыми NBT-Java-ссылками!
                 local ok, result = pcall(me_proxy.exportItem, fp, dir, qty - total_moved)
                 local moved_now = 0
                 
@@ -170,7 +170,7 @@ function me.givePrize(item_id, item_damage, qty)
                 end
             end
             
-            -- Если предмет успешно пошел, но мы не выдали всё нужное количество
+            -- Добиваем нужное количество
             if total_moved > 0 and total_moved < qty then
                 local attempts = 0
                 while total_moved < qty and attempts < 100 do
@@ -184,7 +184,7 @@ function me.givePrize(item_id, item_damage, qty)
                     if m2 > 0 then total_moved = total_moved + m2 else break end
                     attempts = attempts + 1
                 end
-                break -- Выходим из цикла сторон
+                break
             end
             if total_moved >= qty then break end
         end
