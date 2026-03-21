@@ -1,4 +1,4 @@
--- /lua/casino_gui.lua
+-- /home/casino_gui.lua
 local component = require("component")
 local term = require("term")
 local unicode = require("unicode")
@@ -50,18 +50,18 @@ function gui.drawStatic(user, timer, top3, casinoName)
         center(rightColX, rY, rightColW, user.balance .. " " .. CUR, gui.COLORS.warn, gui.COLORS.panel); rY = rY + 2
         if timer then center(rightColX, rY, rightColW, "Выход через: " .. timer .. "с", gui.COLORS.label, gui.COLORS.panel) end
         rY = rY + 2
-        gui.btn("deposit", rightColX + 2, rY, rightColW - 4, 3, "ПОПОЛНИТЬ", gui.COLORS.good)
+        gui.btn("deposit", rightColX + 2, rY, rightColW - 4, 3, "ПОПОЛНИТЬ СЧЕТ", gui.COLORS.good)
         rY = rY + 4
         if user.isAdmin then gui.btn("admin_panel", rightColX + 2, rY, rightColW - 4, 1, "АДМИН ПАНЕЛЬ", gui.COLORS.energy); rY = rY + 2 end
     else
-        gui.btn("login", rightColX + 2, rY, rightColW - 4, 3, "ВОЙТИ", gui.COLORS.good)
+        gui.btn("login", rightColX + 2, rY, rightColW - 4, 3, "АВТОРИЗАЦИЯ", gui.COLORS.good)
         rY = rY + 4
         center(rightColX, rY, rightColW, "Войдите для игры", gui.COLORS.label, gui.COLORS.panel)
         rY = rY + 3
     end
 
     rect(rightColX, rY, rightColW, 1, gui.COLORS.tileHeader)
-    center(rightColX, rY, rightColW, "ТОП 3 ИГРОКОВ:", gui.COLORS.warn, gui.COLORS.tileHeader)
+    center(rightColX, rY, rightColW, "ТОП 3 ПО ТРАТАМ:", gui.COLORS.warn, gui.COLORS.tileHeader)
     rY = rY + 2
     if top3 and #top3 > 0 then
         for i, t in ipairs(top3) do
@@ -165,12 +165,11 @@ end
 
 function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
-    rect(1, 1, W, 3, gui.COLORS.panel); center(1, 2, W, "ПАНЕЛЬ АДМИНИСТРАТОРА", gui.COLORS.energy, gui.COLORS.panel)
+    rect(1, 1, W, 3, gui.COLORS.panel); center(1, 2, W, "ПАНЕЛЬ УПРАВЛЕНИЯ КАЗИНО", gui.COLORS.energy, gui.COLORS.panel)
     
     gui.btn("adm_cases", 2, 5, 14, 3, "КЕЙСЫ", substate == "cases" and gui.COLORS.btnActive or gui.COLORS.btn)
     gui.btn("adm_name", 17, 5, 18, 3, "ИМЯ КАЗИНО", gui.COLORS.btn)
     gui.btn("adm_logs", 36, 5, 14, 3, "ЛОГИ", substate == "logs" and gui.COLORS.btnActive or gui.COLORS.btn)
-    -- ДОБАВЛЕНА НОВАЯ ВКЛАДКА "СКУПКА"
     gui.btn("adm_deposit", 51, 5, 14, 3, "СКУПКА", substate == "deposit" and gui.COLORS.btnActive or gui.COLORS.btn)
     
     gui.btn("close_admin", W - 16, 5, 14, 3, "ВЫЙТИ", gui.COLORS.bad)
@@ -187,8 +186,36 @@ function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
             
             if substate == "logs" then
                 local str = tostring(el)
-                text(4, y, unicode.sub(str, 1, W - 8), gui.COLORS.text, gui.COLORS.panel)
-                y = y + 1
+                local actionCol = gui.COLORS.text
+                if str:match("ВЫИГРЫШ") then actionCol = gui.COLORS.good
+                elseif str:match("ПОПОЛНЕНИЕ") then actionCol = gui.COLORS.warn
+                elseif str:match("УДАЛЕН") or str:match("ОШИБКА") then actionCol = gui.COLORS.bad end
+                
+                local time_part, rest = str:match("(%[%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d%]) (.*)")
+                if time_part and rest then
+                    text(4, y, time_part, gui.COLORS.label, gui.COLORS.panel)
+                    local startX = 4 + unicode.len(time_part) + 1
+                    local maxW = W - startX - 4
+                    
+                    local currentLine = ""
+                    for word in string.gmatch(rest, "%S+") do
+                        if unicode.len(currentLine) + unicode.len(word) + 1 > maxW then
+                            text(startX, y, currentLine, actionCol, gui.COLORS.panel)
+                            y = y + 1
+                            currentLine = word
+                            if y >= H - 5 then break end
+                        else
+                            currentLine = currentLine == "" and word or (currentLine .. " " .. word)
+                        end
+                    end
+                    if currentLine ~= "" and y < H - 5 then
+                        text(startX, y, currentLine, actionCol, gui.COLORS.panel)
+                        y = y + 1
+                    end
+                else
+                    text(4, y, unicode.sub(str, 1, W - 8), actionCol, gui.COLORS.panel)
+                    y = y + 1
+                end
             elseif substate == "deposit" then
                 text(4, y, el.name .. " (" .. el.price .. " " .. CUR .. ")", gui.COLORS.text, gui.COLORS.panel)
                 gui.btn("adm_del_dep_"..id, W - 14, y, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
@@ -207,10 +234,10 @@ function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
     
     local py = H - 4
     if substate == "logs" then
-        local filterText = (logFilter == nil or logFilter == "") and "ВСЕ" or unicode.sub(logFilter, 1, 12)
+        local filterText = (log_filter == nil or log_filter == "") and "ВСЕ" or unicode.sub(log_filter, 1, 12)
         gui.btn("filter_logs", 2, py, 24, 3, "ФИЛЬТР: " .. filterText, gui.COLORS.energy)
-        if logFilter ~= nil and logFilter ~= "" then
-            gui.btn("clear_filter", 28, py, 14, 3, "СБРОС", gui.COLORS.bad)
+        if log_filter ~= nil and log_filter ~= "" then
+            gui.btn("clear_filter", 28, py, 14, 3, "СБРОСИТЬ", gui.COLORS.bad)
         end
     elseif substate == "deposit" then
         gui.btn("adm_add_dep", 2, py, 24, 3, "ДОБАВИТЬ ПРЕДМЕТ", gui.COLORS.good)
@@ -228,7 +255,7 @@ end
 
 function gui.drawEditorModal(data)
     gui.buttons = {}
-    local w = 70; local h = 14
+    local w = 70; local h = 12
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
@@ -253,7 +280,7 @@ function gui.drawEditorModal(data)
         gui.btn("focus_price", x+4, y+8, w-8, 1, data.price .. ((data.focus == "price") and "_" or ""), bgPrice, gui.COLORS.warn)
     end
     
-    local btnText = (data.target == "log_filter") and "ПОИСК" or "СОХРАНИТЬ"
+    local btnText = (data.target == "log_filter") and "ИСКАТЬ" or "СОХРАНИТЬ"
     gui.btn("ed_save", x + 4, y + h - 4, math.floor(w/2) - 6, 3, btnText, gui.COLORS.good)
     gui.btn("ed_cancel", x + math.floor(w/2) + 2, y + h - 4, math.floor(w/2) - 6, 3, "ОТМЕНА", gui.COLORS.bad)
 end
@@ -281,7 +308,7 @@ function gui.drawCaseEditor(case, items)
             text(x + 45, currentY, "Цена: " .. item.price, gui.COLORS.warn, gui.COLORS.panel)
             text(x + 60, currentY, "Шанс: " .. item.chance .. "%", chanceColor, gui.COLORS.panel)
             
-            gui.btn("case_edit_item_"..i, x + w - 26, currentY, 12, 1, "РЕДАКТ", gui.COLORS.warn)
+            gui.btn("case_edit_item_"..i, x + w - 26, currentY, 12, 1, "ИЗМЕНИТЬ", gui.COLORS.warn)
             gui.btn("case_del_item_"..i, x + w - 12, currentY, 10, 1, "X", gui.COLORS.bad)
             currentY = currentY + 2
         end
@@ -300,15 +327,17 @@ function gui.drawItemEditor(data, isDeposit)
     
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
     rect(x, y, w, h, gui.COLORS.tileBg); rect(x, y, w, 2, gui.COLORS.energy)
-    center(x, y, w, data.is_new and "ДОБАВИТЬ ПРЕДМЕТ" or "РЕДАКТИРОВАТЬ ПРЕДМЕТ", gui.COLORS.text, gui.COLORS.energy)
+    center(x, y, w, data.is_new and "ДОБАВЛЕНИЕ ПРЕДМЕТА" or "РЕДАКТИРОВАНИЕ ПРЕДМЕТА", gui.COLORS.text, gui.COLORS.energy)
 
-    text(x+4, y+3, "Системный ID: " .. data.orig_id .. ":" .. (data.damage or 0), gui.COLORS.label, gui.COLORS.tileBg)
+    text(x+4, y+3, "Системное имя: " .. data.orig_id .. ":" .. (data.damage or 0), gui.COLORS.label, gui.COLORS.tileBg)
 
     text(x+4, y+5, isDeposit and "Имя (отображается только здесь):" or "Отображаемое имя (можно изменить):", gui.COLORS.text, gui.COLORS.tileBg)
     local bgName = (data.focus == "name") and gui.COLORS.inputFocus or gui.COLORS.inputBg
     gui.btn("focus_name", x+4, y+6, w-8, 1, data.name .. ((data.focus == "name") and "_" or ""), bgName, gui.COLORS.text)
     
-    text(x+4, y+8, isDeposit and "Цена скупки за 1 штуку:" : "Цена (для симулятора и аналитики):", gui.COLORS.text, gui.COLORS.tileBg)
+    -- ИСПРАВЛЕНА СТРОЧКА ТУТ (вместо двоеточия стоит or)
+    text(x+4, y+8, isDeposit and "Цена скупки за 1 штуку:" or "Цена (для симулятора и аналитики):", gui.COLORS.text, gui.COLORS.tileBg)
+    
     local bgPrice = (data.focus == "price") and gui.COLORS.inputFocus or gui.COLORS.inputBg
     gui.btn("focus_price", x+4, y+9, w-8, 1, data.price .. ((data.focus == "price") and "_" or ""), bgPrice, gui.COLORS.warn)
 
@@ -327,12 +356,15 @@ function gui.drawRoulette(strip, strip_pos)
     local w, h = gpu.getResolution()
 
     local item_w, item_h = 16, 7
+    local total_items = #strip
     
+    -- Рисуем центральный указатель
     local pointer_x = math.floor(w / 2)
     gpu.setForeground(gui.COLORS.good)
-    gpu.set(pointer_x, math.floor(h/2) - math.floor(item_h/2) - 1, "v")
-    gpu.set(pointer_x, math.floor(h/2) + math.floor(item_h/2) + 1, "^")
+    gpu.set(pointer_x, math.floor(h/2) - math.floor(item_h/2) - 1, "▼")
+    gpu.set(pointer_x, math.floor(h/2) + math.floor(item_h/2) + 1, "▲")
 
+    -- Позиция первого видимого элемента
     local start_x = pointer_x - math.floor(item_w / 2)
 
     for i, item in ipairs(strip) do
@@ -340,6 +372,7 @@ function gui.drawRoulette(strip, strip_pos)
         local item_start_x = item_center_x - math.floor(item_w / 2)
         local item_y = math.floor((h - item_h) / 2)
 
+        -- Отсекаем невидимые элементы
         if item_start_x + item_w >= 1 and item_start_x <= w then
             local rarity_color = gui.COLORS.label
             if item.chance < 5 then rarity_color = config.rarity_colors.super_rare
@@ -349,12 +382,15 @@ function gui.drawRoulette(strip, strip_pos)
             else rarity_color = config.rarity_colors.trash
             end
 
+            -- Рамка с цветом редкости
             rect(item_start_x, item_y, item_w, item_h, rarity_color)
             rect(item_start_x + 1, item_y + 1, item_w - 2, item_h - 2, gui.COLORS.tileBg)
 
+            -- Название (с обрезкой, если не влезает)
             local name = unicode.sub(item.name, 1, item_w - 2)
             center(item_start_x, item_y + 2, item_w, name, gui.COLORS.text, gui.COLORS.tileBg)
 
+            -- Цена
             local price_str = tostring(item.price) .. " " .. CUR
             center(item_start_x, item_y + 4, item_w, price_str, gui.COLORS.warn, gui.COLORS.tileBg)
         end
