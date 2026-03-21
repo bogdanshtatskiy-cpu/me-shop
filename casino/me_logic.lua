@@ -67,19 +67,22 @@ function me.sellAllToBalance()
         local stack = me.t.getStackInSlot(me.config.chest_side, slot)
         if stack and stack.size > 0 then
             local item_key = stack.name .. (stack.damage > 0 and (":"..stack.damage) or "")
-            local price = deposit_prices[item_key]
+            local dep_info = deposit_prices[item_key]
 
-            if price and tonumber(price) then
-                local moved, reason = me.t.transferItem(me.config.chest_side, me.config.me_side, stack.size, slot)
-                local actual_moved = 0
-                if type(moved) == "number" then actual_moved = moved
-                elseif type(moved) == "boolean" and moved == true then actual_moved = stack.size
-                elseif type(moved) == "boolean" and moved == false then err_msg = reason end
+            if dep_info then
+                local price = type(dep_info) == "table" and dep_info.price or dep_info
+                if tonumber(price) then
+                    local moved, reason = me.t.transferItem(me.config.chest_side, me.config.me_side, stack.size, slot)
+                    local actual_moved = 0
+                    if type(moved) == "number" then actual_moved = moved
+                    elseif type(moved) == "boolean" and moved == true then actual_moved = stack.size
+                    elseif type(moved) == "boolean" and moved == false then err_msg = reason end
 
-                if actual_moved > 0 then
-                    total_earned = total_earned + (actual_moved * tonumber(price))
-                    local display_name = stack.label or stack.name
-                    sold_stats[display_name] = (sold_stats[display_name] or 0) + actual_moved
+                    if actual_moved > 0 then
+                        total_earned = total_earned + (actual_moved * tonumber(price))
+                        local display_name = type(dep_info) == "table" and dep_info.name or (stack.label or stack.name)
+                        sold_stats[display_name] = (sold_stats[display_name] or 0) + actual_moved
+                    end
                 end
             end
         end
@@ -105,8 +108,8 @@ end
 -- Выдача призов
 function me.givePrize(item_id, item_damage, qty)
     local perfect_fingerprint = {
-        name = item_id, -- ИСПРАВЛЕНО ТУТ: МЭ сеть ищет ключи name, а не id
-        damage = math.floor(item_damage or 0) -- ИСПРАВЛЕНО ТУТ: МЭ сеть ищет ключи damage, а не dmg
+        id = item_id, -- ИСПРАВЛЕНО: Вернули ключ id, он критически важен для AE2
+        damage = math.floor(item_damage or 0)
     }
     
     local total_moved = 0
