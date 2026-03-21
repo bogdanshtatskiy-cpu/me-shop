@@ -1,4 +1,4 @@
--- /lua/casino_main.lua
+-- /home/casino_main.lua
 local component = require("component")
 local event = require("event")
 local os = require("os")
@@ -252,7 +252,7 @@ end
 
 local function refreshScreen()
     if state == "casino" then
-        gui.drawStatic(currentUser, currentUser and idleTimer or nil, getTop3Players(), casino_name)
+        gui.drawStatic(currentUser, currentUser and idleTimer or nil, getTop3Players(), casino_name, me.getDepositPrices())
         local pItems, maxPage = getPageItems(casino_cases, ITEMS_PER_PAGE)
         gui.drawCases(pItems, currentPage, maxPage)
         if not me_ok then component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg) end
@@ -274,22 +274,22 @@ local function refreshScreen()
             listToPass = loadLogsLocal(log_filter)
             perPage = 30
         elseif state == "admin_deposit" then
-            -- Превращаем таблицу цен в массив для вывода
             for k, v in pairs(me.getDepositPrices()) do
-                table.insert(listToPass, {name = k, price = v, orig_key = k})
+                local p_name = type(v) == "table" and v.name or k
+                local p_price = type(v) == "table" and v.price or v
+                table.insert(listToPass, {name = p_name, price = p_price, orig_key = k})
             end
             table.sort(listToPass, function(a,b) return a.name < b.name end)
         end
         
         local pItems, maxP = getAdminPageItems(listToPass, perPage)
-        -- Для скупки нужно передавать оригинальный ключ
         if state == "admin_deposit" then
             for _, pItem in ipairs(pItems) do pItem.origIdx = pItem.item.orig_key end
         end
         
         gui.drawAdmin(state:gsub("admin_", ""), pItems, adminPage, maxP, log_filter)
     elseif state == "editor" then
-        gui.drawStatic(currentUser, idleTimer, getTop3Players(), casino_name)
+        gui.drawStatic(currentUser, idleTimer, getTop3Players(), casino_name, me.getDepositPrices())
         gui.drawEditorModal(ed_data)
     end
 end
@@ -310,7 +310,7 @@ while true do
     local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.01)
     local current_uptime = computer.uptime()
     
-    -- === СИСТЕМА ТОЧНОГО ВРЕМЕНИ (1 раз в секунду) ===
+    -- === СИСТЕМА ТОЧНОГО ВРЕМЕНИ ===
     if current_uptime - last_tick >= 1 then
         last_tick = current_uptime
         
@@ -534,7 +534,7 @@ while true do
                                 else
                                     local key = ed_data.orig_id .. (ed_data.damage > 0 and (":"..ed_data.damage) or "")
                                     local prices = me.getDepositPrices()
-                                    prices[key] = price
+                                    prices[key] = { price = price, name = ed_data.name }
                                     me.saveDepositPrices(prices)
                                     state = "admin_deposit"
                                 end
@@ -597,7 +597,6 @@ while true do
                             local case_idx = tonumber(action:match("%d+"))
                             local case = casino_cases[case_idx]
                             
-                            -- ТЕПЕРЬ ТУТ БЕЗОПАСНЫЙ БЛОК БЕЗ RETURN
                             if not currentUser then 
                                 showMsg("ОШИБКА", "Сначала авторизуйтесь!", true, 3) 
                             elseif not case.items or #case.items == 0 then 
