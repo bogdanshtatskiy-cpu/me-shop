@@ -1,8 +1,8 @@
 -- /lua/casino_json.lua
--- A robust JSON library for OpenComputers
+-- Надежная библиотека для работы с JSON в OpenComputers
 local json = {}
 
--- === JSON ENCODING (Lua -> JSON) ===
+-- === КОДИРОВАНИЕ В JSON (Lua -> JSON) ===
 local function escape_str(s)
   return s:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r")
 end
@@ -25,7 +25,7 @@ function json.encode(v)
     end
     
     if is_array then
-      if max == 0 then return "[]" end -- Handle empty array
+      if max == 0 then return "[]" end -- Пустой массив
       local parts = {}
       for i = 1, max do
         parts[i] = json.encode(v[i])
@@ -43,7 +43,7 @@ function json.encode(v)
   end
 end
 
--- === JSON DECODING (JSON -> Lua) ===
+-- === ДЕКОДИРОВАНИЕ ИЗ JSON (JSON -> Lua) ===
 local function create_set(...)
   local res = {}
   for i = 1, select("#", ...) do res[select(i, ...)] = true end
@@ -59,7 +59,7 @@ local function parse(str, pos)
   while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
   local c = str:sub(pos, pos)
   
-  if c == '"' then -- Strings
+  if c == '"' then -- Строки
     local res = ""
     local i = pos + 1
     while i <= #str do
@@ -74,9 +74,9 @@ local function parse(str, pos)
         i = i + 1
       end
     end
-    error("Unfinished string at position " .. pos)
+    error("Незакрытая строка на позиции " .. pos)
   
-  elseif c == "[" then -- Arrays
+  elseif c == "[" then -- Массивы
     local res = {}
     pos = pos + 1
     while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
@@ -88,11 +88,11 @@ local function parse(str, pos)
       while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
       local next_char = str:sub(pos, pos)
       if next_char == "]" then return res, pos + 1 end
-      if next_char ~= "," then error("Expected ',' or ']' at position " .. pos) end
+      if next_char ~= "," then error("Ожидалась ',' или ']' на позиции " .. pos) end
       pos = pos + 1
     end
     
-  elseif c == "{" then -- Objects (Tables)
+  elseif c == "{" then -- Объекты (Таблицы)
     local res = {}
     pos = pos + 1
     while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
@@ -100,9 +100,9 @@ local function parse(str, pos)
     while true do
       local key
       key, pos = parse(str, pos)
-      if type(key) ~= "string" then error("Expected string key at position " .. pos) end
+      if type(key) ~= "string" then error("Ожидался строковый ключ на позиции " .. pos) end
       while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
-      if str:sub(pos, pos) ~= ":" then error("Expected ':' at position " .. pos) end
+      if str:sub(pos, pos) ~= ":" then error("Ожидалось ':' на позиции " .. pos) end
       pos = pos + 1
       local val
       val, pos = parse(str, pos)
@@ -110,11 +110,11 @@ local function parse(str, pos)
       while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
       local next_char = str:sub(pos, pos)
       if next_char == "}" then return res, pos + 1 end
-      if next_char ~= "," then error("Expected ',' or '}' at position " .. pos) end
+      if next_char ~= "," then error("Ожидалась ',' или '}' на позиции " .. pos) end
       pos = pos + 1
     end
     
-  else -- Numbers, Booleans, Null
+  else -- Числа, Булевы значения, Null
     local start_pos = pos
     while pos <= #str and not delim_chars[str:sub(pos, pos)] do pos = pos + 1 end
     local val_str = str:sub(start_pos, pos - 1)
@@ -123,7 +123,7 @@ local function parse(str, pos)
     if literal ~= nil or val_str == "null" then return literal, pos end
 
     local num = tonumber(val_str)
-    if num then return num, pos else error("Invalid value '" .. val_str .. "' at position " .. start_pos) end
+    if num then return num, pos else error("Неверное значение '" .. val_str .. "' на позиции " .. start_pos) end
   end
 end
 
