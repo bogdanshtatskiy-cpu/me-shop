@@ -102,29 +102,30 @@ function me.peekInput()
 end
 
 -- =========================================================
--- БЕЗОПАСНАЯ ВЫДАЧА (СТРОГО УЧИТЫВАЕТ DAMAGE/ТИРЫ)
+-- БЕЗОПАСНАЯ И УМНАЯ ВЫДАЧА (Solar Panels + Draconic Evolution)
 -- =========================================================
 function me.givePrize(item_id, item_damage, qty)
     if not item_id or item_id == "" then
-        return false, "У предмета не указан Системный ID в настройках кейса!", 0
+        return false, "У предмета не указан Системный ID!", 0
     end
 
     local item_damage_num = math.floor(item_damage or 0)
     local total_moved = 0
-    local last_err = "Сундук выдачи не найден или предмета нет в МЭ!"
+    local last_err = "Сундук не найден или предмета нет в МЭ!"
     local no_chest_found = true
 
     local directions = {"DOWN", "UP", "NORTH", "SOUTH", "WEST", "EAST"}
+    
+    -- 1. СТРОГИЙ отпечаток (для панелей и обычных вещей, учитывает Damage)
+    local strict_fp = { id = item_id, name = item_id, damage = item_damage_num, dmg = item_damage_num }
+    -- 2. ГИБКИЙ отпечаток (для брони и механизмов с энергией, игнорирует NBT)
+    local wildcard_fp = { id = item_id, name = item_id }
 
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
         
-        -- Базовый чистый отпечаток (с ЖЕСТКОЙ привязкой к Damage)
-        local fingerprints_to_try = {
-            { id = item_id, name = item_id, damage = item_damage_num, dmg = item_damage_num }
-        }
-        
-        -- УМНЫЙ ПОИСК В МЭ: Ищем этот же ID, фильтруем по Damage и берем их NBT-теги
+        -- Узнаем, есть ли у предмета в МЭ сети скрытые NBT-теги (заряд/энергия)
+        local has_nbt = false
         local ok_search, items = pcall(me_proxy.getItemsInNetwork, { name = item_id })
         if not ok_search or not items or #items == 0 then
             ok_search, items = pcall(me_proxy.getItemsInNetwork, { id = item_id })
@@ -132,14 +133,11 @@ function me.givePrize(item_id, item_damage, qty)
         
         if ok_search and type(items) == "table" then
             for _, item in pairs(items) do
-                -- СТРОГАЯ ПРОВЕРКА: Совпадает и ID, и Damage (урон/тир панели)
                 if type(item) == "table" and (item.name == item_id or item.id == item_id) and math.floor(item.damage or item.dmg or 0) == item_damage_num then
-                    -- Копируем этот предмет, чтобы сохранить его NBT
-                    local fp = {}
-                    for k, v in pairs(item) do fp[k] = v end
-                    fp.id = fp.id or fp.name or item_id
-                    fp.damage = item_damage_num
-                    table.insert(fingerprints_to_try, fp)
+                    if item.hasTag then
+                        has_nbt = true
+                        break
+                    end
                 end
             end
         end
@@ -148,32 +146,41 @@ function me.givePrize(item_id, item_damage, qty)
         local success_fp = nil
 
         for _, dir in ipairs(directions) do
-            -- Перебираем наши отпечатки (все они строго с нужным Damage!)
-            for _, fp in ipairs(fingerprints_to_try) do
-                local ok, result = pcall(me_proxy.exportItem, fp, dir, qty)
-                local moved_now = 0
-                
+            -- ШАГ 1: Всегда сначала пробуем строгий запрос (с проверкой Damage)
+            local ok, result = pcall(me_proxy.exportItem, strict_fp, dir, qty)
+            local moved_now = 0
+            
+            if ok and type(result) == "table" and result.size then moved_now = result.size
+            elseif ok and type(result) == "number" then moved_now = result end
+            
+            if moved_now > 0 then
+                success_fp = strict_fp
+            elseif not ok then
+                local err_str = tostring(result)
+                if not err_str:match("No neighbour attached") then
+                    last_err = err_str
+                    no_chest_found = false
+                end
+            end
+
+            -- ШАГ 2: Если строгий не сработал (из-за энергии/NBT), сундук точно есть, и мы знаем что это вещь с NBT
+            if moved_now == 0 and has_nbt and not no_chest_found then
+                ok, result = pcall(me_proxy.exportItem, wildcard_fp, dir, qty)
                 if ok and type(result) == "table" and result.size then moved_now = result.size
                 elseif ok and type(result) == "number" then moved_now = result end
                 
                 if moved_now > 0 then
-                    total_moved = total_moved + moved_now
-                    success_dir = dir
-                    success_fp = fp
-                    no_chest_found = false
-                    break
-                elseif not ok then
-                    local err_str = tostring(result)
-                    if err_str:match("No neighbour attached") then
-                        -- Просто пустая сторона, идем дальше
-                    else
-                        last_err = err_str
-                        no_chest_found = false
-                    end
+                    success_fp = wildcard_fp
                 end
             end
             
-            -- Если выдача началась, добиваем остаток (если стак большой)
+            if moved_now > 0 then
+                total_moved = total_moved + moved_now
+                success_dir = dir
+                no_chest_found = false
+            end
+            
+            -- Если начали выдавать, добиваем стак
             if total_moved > 0 and total_moved < qty then
                 local attempts = 0
                 while total_moved < qty and attempts < 150 do
@@ -198,7 +205,7 @@ function me.givePrize(item_id, item_damage, qty)
         return true, "Успешно", total_moved
     else 
         if no_chest_found then
-            last_err = "К МЭ Интерфейсу вплотную не приставлен сундук!"
+            last_err = "К МЭ Интерфейсу не приставлен сундук вплотную!"
         end
         return false, "Ошибка: " .. last_err, 0 
     end
