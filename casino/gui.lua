@@ -20,10 +20,24 @@ local W, H = gpu.getResolution()
 local rightColX = math.floor(W * 0.75) + 1
 local rightColW = W - rightColX + 1
 
-local function rect(x, y, w, h, col) gpu.setBackground(col); gpu.fill(x, y, w, h, " ") end
-local function text(x, y, str, fg, bg) if bg then gpu.setBackground(bg) end; gpu.setForeground(fg); gpu.set(x, y, str) end
+-- Безопасная функция заливки, чтобы предотвратить вылеты за экран
+local function rect(x, y, w, h, col) 
+    local dx, dy = math.max(1, x), math.max(1, y)
+    local dw, dh = w - (dx - x), h - (dy - y)
+    if dx + dw - 1 > W then dw = W - dx + 1 end
+    if dy + dh - 1 > H then dh = H - dy + 1 end
+    if dw > 0 and dh > 0 then
+        gpu.setBackground(col); gpu.fill(dx, dy, dw, dh, " ") 
+    end
+end
+
+local function text(x, y, str, fg, bg) 
+    if y < 1 or y > H or x > W then return end
+    if bg then gpu.setBackground(bg) end; gpu.setForeground(fg); gpu.set(x, y, str) 
+end
+
 local function center(x, y, w, str, fg, bg) 
-    if bg then gpu.setBackground(bg) end; gpu.fill(x, y, w, 1, " ")
+    if bg then rect(x, y, w, 1, bg) end
     local px = x + math.floor((w - unicode.len(str))/2)
     if fg then gpu.setForeground(fg) end; gpu.set(px, y, str) 
 end
@@ -35,7 +49,7 @@ function gui.btn(id, x, y, w, h, str, bg, fg)
     gui.buttons[id] = {x=x, y=y, w=w, h=h} 
 end
 
-function gui.drawStatic(user, timer, top3, casinoName)
+function gui.drawStatic(user, timer, top3, casinoName, depositPrices)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, rightColX - 1, 3, gui.COLORS.panel)
     center(1, 2, rightColX - 1, casinoName or "КАЗИНО", gui.COLORS.energy, gui.COLORS.panel)
@@ -58,6 +72,29 @@ function gui.drawStatic(user, timer, top3, casinoName)
         rY = rY + 4
         center(rightColX, rY, rightColW, "Войдите для игры", gui.COLORS.label, gui.COLORS.panel)
         rY = rY + 3
+    end
+
+    -- ИНФОРМАЦИЯ О СКУПКЕ (вывод цен)
+    local dep_texts = {}
+    for k, v in pairs(depositPrices or {}) do
+        local name = type(v) == "table" and v.name or k
+        local price = type(v) == "table" and v.price or v
+        table.insert(dep_texts, name .. " - " .. price .. " " .. CUR)
+    end
+    
+    if #dep_texts > 0 then
+        rect(rightColX, rY, rightColW, 1, gui.COLORS.tileHeader)
+        center(rightColX, rY, rightColW, "СКУПКА ПРЕДМЕТОВ:", gui.COLORS.energy, gui.COLORS.tileHeader)
+        rY = rY + 2
+        for i, txt in ipairs(dep_texts) do
+            if rY > H - 7 then break end -- Оставляем место для ТОП 3
+            if unicode.len(txt) > rightColW - 4 then
+                txt = unicode.sub(txt, 1, rightColW - 7) .. "..."
+            end
+            text(rightColX + 2, rY, txt, gui.COLORS.text, gui.COLORS.panel)
+            rY = rY + 1
+        end
+        rY = rY + 1
     end
 
     rect(rightColX, rY, rightColW, 1, gui.COLORS.tileHeader)
@@ -218,6 +255,7 @@ function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
                 end
             elseif substate == "deposit" then
                 text(4, y, el.name .. " (" .. el.price .. " " .. CUR .. ")", gui.COLORS.text, gui.COLORS.panel)
+                gui.btn("adm_edit_dep_"..id, W - 28, y, 12, 1, "РЕДАКТ", gui.COLORS.warn)
                 gui.btn("adm_del_dep_"..id, W - 14, y, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
                 y = y + 2
             else
@@ -295,7 +333,7 @@ function gui.drawCaseEditor(case, items)
     center(x, y, w, "РЕДАКТОР СОДЕРЖИМОГО: " .. case.name, gui.COLORS.text, gui.COLORS.energy)
 
     local currentY = y + 3
-    if items and #items > 0 then
+    if #items > 0 then
         for i, item in ipairs(items) do
             if currentY > y + h - 5 then break end
             local chanceColor = gui.COLORS.text
@@ -335,9 +373,7 @@ function gui.drawItemEditor(data, isDeposit)
     local bgName = (data.focus == "name") and gui.COLORS.inputFocus or gui.COLORS.inputBg
     gui.btn("focus_name", x+4, y+6, w-8, 1, data.name .. ((data.focus == "name") and "_" or ""), bgName, gui.COLORS.text)
     
-    -- ИСПРАВЛЕНА СТРОЧКА ТУТ (вместо двоеточия стоит or)
     text(x+4, y+8, isDeposit and "Цена скупки за 1 штуку:" or "Цена (для симулятора и аналитики):", gui.COLORS.text, gui.COLORS.tileBg)
-    
     local bgPrice = (data.focus == "price") and gui.COLORS.inputFocus or gui.COLORS.inputBg
     gui.btn("focus_price", x+4, y+9, w-8, 1, data.price .. ((data.focus == "price") and "_" or ""), bgPrice, gui.COLORS.warn)
 
@@ -351,50 +387,91 @@ function gui.drawItemEditor(data, isDeposit)
     gui.btn("item_ed_cancel", x + math.floor(w/2) + 2, y + h - 4, math.floor(w/2) - 6, 3, "ОТМЕНА", gui.COLORS.bad)
 end
 
+
 function gui.drawRoulette(strip, strip_pos)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     local w, h = gpu.getResolution()
 
-    local item_w, item_h = 16, 7
-    local total_items = #strip
+    -- Базовый размер и размер увеличенного центрального элемента
+    local base_w, base_h = 20, 7
+    local center_w, center_h = 28, 11
+    local step = 24
     
-    -- Рисуем центральный указатель
     local pointer_x = math.floor(w / 2)
-    gpu.setForeground(gui.COLORS.good)
-    gpu.set(pointer_x, math.floor(h/2) - math.floor(item_h/2) - 1, "▼")
-    gpu.set(pointer_x, math.floor(h/2) + math.floor(item_h/2) + 1, "▲")
-
-    -- Позиция первого видимого элемента
-    local start_x = pointer_x - math.floor(item_w / 2)
-
+    
+    -- Собираем элементы, которые видны на экране
+    local render_list = {}
     for i, item in ipairs(strip) do
-        local item_center_x = start_x + (i - strip_pos) * (item_w + 1)
-        local item_start_x = item_center_x - math.floor(item_w / 2)
-        local item_y = math.floor((h - item_h) / 2)
-
-        -- Отсекаем невидимые элементы
-        if item_start_x + item_w >= 1 and item_start_x <= w then
-            local rarity_color = gui.COLORS.label
-            if item.chance < 5 then rarity_color = config.rarity_colors.super_rare
-            elseif item.chance < 20 then rarity_color = config.rarity_colors.rare
-            elseif item.chance < 60 then rarity_color = config.rarity_colors.uncommon
-            elseif item.chance < 80 then rarity_color = config.rarity_colors.common
-            else rarity_color = config.rarity_colors.trash
-            end
-
-            -- Рамка с цветом редкости
-            rect(item_start_x, item_y, item_w, item_h, rarity_color)
-            rect(item_start_x + 1, item_y + 1, item_w - 2, item_h - 2, gui.COLORS.tileBg)
-
-            -- Название (с обрезкой, если не влезает)
-            local name = unicode.sub(item.name, 1, item_w - 2)
-            center(item_start_x, item_y + 2, item_w, name, gui.COLORS.text, gui.COLORS.tileBg)
-
-            -- Цена
-            local price_str = tostring(item.price) .. " " .. CUR
-            center(item_start_x, item_y + 4, item_w, price_str, gui.COLORS.warn, gui.COLORS.tileBg)
+        local offset = i - strip_pos
+        if math.abs(offset) < (w / step) / 2 + 1.5 then
+            table.insert(render_list, {item = item, offset = offset})
         end
     end
+    
+    -- Сортируем так, чтобы центральный элемент рисовался ПОСЛЕДНИМ (поверх остальных)
+    table.sort(render_list, function(a, b) return math.abs(a.offset) > math.abs(b.offset) end)
+
+    for _, ri in ipairs(render_list) do
+        local item = ri.item
+        local offset = ri.offset
+        local dist = math.abs(offset)
+        
+        local item_center_x = math.floor(pointer_x + offset * step)
+        
+        -- Вычисляем увеличение в зависимости от близости к центру
+        local scale = 0
+        if dist < 1.0 then scale = 1 - dist end
+        
+        local cur_w = math.floor(base_w + (center_w - base_w) * scale)
+        local cur_h = math.floor(base_h + (center_h - base_h) * scale)
+        if cur_w % 2 ~= 0 then cur_w = cur_w + 1 end
+        if cur_h % 2 == 0 then cur_h = cur_h + 1 end
+        
+        local item_start_x = item_center_x - math.floor(cur_w / 2)
+        local item_y = math.floor((h - cur_h) / 2)
+
+        -- Отрисовка
+        local rarity_color = gui.COLORS.label
+        if item.chance < 5 then rarity_color = config.rarity_colors.super_rare
+        elseif item.chance < 20 then rarity_color = config.rarity_colors.rare
+        elseif item.chance < 60 then rarity_color = config.rarity_colors.uncommon
+        elseif item.chance < 80 then rarity_color = config.rarity_colors.common
+        else rarity_color = config.rarity_colors.trash end
+
+        rect(item_start_x, item_y, cur_w, cur_h, rarity_color)
+        rect(item_start_x + 1, item_y + 1, cur_w - 2, cur_h - 2, gui.COLORS.tileBg)
+
+        -- Умный перенос длинного названия
+        local lines = {}
+        local curr = ""
+        for word in string.gmatch(item.name, "%S+") do
+            if unicode.len(curr) + unicode.len(word) + 1 > cur_w - 4 then
+                if curr ~= "" then table.insert(lines, curr) end
+                curr = word
+            else
+                curr = curr == "" and word or (curr .. " " .. word)
+            end
+        end
+        if curr ~= "" then table.insert(lines, curr) end
+        
+        -- Выводим текст
+        local text_y = item_y + 2
+        for _, line in ipairs(lines) do
+            if text_y < item_y + cur_h - 2 then
+                center(item_start_x, text_y, cur_w, line, gui.COLORS.text, gui.COLORS.tileBg)
+                text_y = text_y + 1
+            end
+        end
+
+        local price_str = tostring(item.price) .. " " .. CUR
+        center(item_start_x, item_y + cur_h - 2, cur_w, price_str, gui.COLORS.warn, gui.COLORS.tileBg)
+    end
+    
+    -- Рисуем стрелки-указатели ПОВЕРХ всего
+    gpu.setBackground(gui.COLORS.bg)
+    gpu.setForeground(gui.COLORS.good)
+    gpu.set(pointer_x, math.floor((h - center_h) / 2) - 1, "▼")
+    gpu.set(pointer_x, math.floor((h + center_h) / 2) + 1, "▲")
 end
 
 function gui.checkClick(x, y)
