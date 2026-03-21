@@ -130,9 +130,11 @@ function me.givePrize(item_id, item_damage, qty)
     local target_db_slot = nil
     
     if db then
-        for i = 1, db.getSize() do
-            local db_item = db.get(i)
-            if db_item and (string.lower(db_item.name) == string.lower(item_id) or string.lower(db_item.id or "") == string.lower(item_id)) then
+        -- У БД нет метода getSize. Максимальный размер (Tier 3) = 81 слот.
+        -- Перебираем безопасно (pcall) до 81. Если слот недоступен, скрипт просто пойдет дальше.
+        for i = 1, 81 do
+            local ok, db_item = pcall(db.get, i)
+            if ok and db_item and (string.lower(db_item.name) == string.lower(item_id) or string.lower(db_item.id or "") == string.lower(item_id)) then
                 target_db_slot = i
                 break
             end
