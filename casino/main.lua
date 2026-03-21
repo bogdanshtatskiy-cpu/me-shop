@@ -354,10 +354,15 @@ while true do
             if elapsed >= roulette_duration then
                 state = "casino"
                 ed_data.return_to = "casino"
-                local ok, msg, num_given = me.givePrize(roulette_winner.id, roulette_winner.damage, 1)
+                
+                local win_qty = roulette_winner.qty or 1
+                local ok, msg, num_given = me.givePrize(roulette_winner.id, roulette_winner.damage, win_qty)
+                
                 if ok and num_given > 0 then
-                    writeLog("ВЫИГРЫШ", currentUser.name, "Выиграл " .. roulette_winner.name .. " из кейса " .. ed_data.case_name)
-                    showMsg("ВЫИГРЫШ!", "Вы получили: " .. roulette_winner.name, false, 5)
+                    local logText = "Выиграл " .. roulette_winner.name .. " (x" .. win_qty .. ") из кейса " .. ed_data.case_name
+                    local msgText = "Вы получили: " .. roulette_winner.name .. " (x" .. win_qty .. ")"
+                    writeLog("ВЫИГРЫШ", currentUser.name, logText)
+                    showMsg("ВЫИГРЫШ!", msgText, false, 5)
                 else
                     currentUser.balance = currentUser.balance + ed_data.case_price
                     writeLog("ОШИБКА ВЫДАЧИ", currentUser.name, "Не удалось выдать " .. roulette_winner.name .. ". " .. msg)
@@ -395,14 +400,17 @@ while true do
             if ed_data.focus == "name" then val = ed_data.name 
             elseif ed_data.focus == "price" then val = tostring(ed_data.price)
             elseif ed_data.focus == "chance" then val = tostring(ed_data.chance)
+            elseif ed_data.focus == "qty" then val = tostring(ed_data.qty)
             end
             if val then
                 if code == 14 then
                     if unicode.len(val) > 0 then val = unicode.sub(val, 1, -2) end
                 elseif char >= 32 then val = val .. unicode.char(char) end
+                
                 if ed_data.focus == "name" then ed_data.name = val
                 elseif ed_data.focus == "price" then ed_data.price = val
                 elseif ed_data.focus == "chance" then ed_data.chance = val
+                elseif ed_data.focus == "qty" then ed_data.qty = val
                 end
                 refreshScreen()
             end
@@ -411,6 +419,7 @@ while true do
             if ed_data.focus == "name" then ed_data.name = ed_data.name .. text
             elseif ed_data.focus == "price" then ed_data.price = tostring(ed_data.price) .. text
             elseif ed_data.focus == "chance" then ed_data.chance = tostring(ed_data.chance) .. text
+            elseif ed_data.focus == "qty" then ed_data.qty = tostring(ed_data.qty) .. text
             end
             refreshScreen()
         elseif ev == "scroll" and state ~= "roulette" then
@@ -452,6 +461,7 @@ while true do
                                 ed_data.name = stack.label or stack.name
                                 ed_data.price = "0"
                                 ed_data.chance = "10"
+                                ed_data.qty = "1" -- Количество по умолчанию
                                 ed_data.orig_id = stack.name
                                 ed_data.damage = stack.damage or 0
                                 ed_data.focus = isDeposit and "price" or "name"
@@ -509,6 +519,7 @@ while true do
                             ed_data.name = item.name
                             ed_data.price = tostring(item.price)
                             ed_data.chance = tostring(item.chance)
+                            ed_data.qty = tostring(item.qty or 1)
                             ed_data.orig_id = item.id
                             ed_data.damage = item.damage
                             ed_data.focus = "name"
@@ -522,6 +533,7 @@ while true do
                         if action == "focus_name" then ed_data.focus = "name"
                         elseif action == "focus_price" then ed_data.focus = "price"
                         elseif action == "focus_chance" then ed_data.focus = "chance"
+                        elseif action == "focus_qty" then ed_data.focus = "qty"
                         elseif action == "item_ed_cancel" then state = (state == "admin_edit_dep_item") and "admin_deposit" or "admin_edit_case"
                         elseif action == "item_ed_save" then
                             local p_str = tostring(ed_data.price):gsub(",", ".")
@@ -541,13 +553,16 @@ while true do
                             else
                                 local c_str = tostring(ed_data.chance):gsub(",", ".")
                                 local chance = tonumber(c_str)
+                                local q_str = tostring(ed_data.qty):gsub(",", ".")
+                                local qty = math.floor(tonumber(q_str) or 1)
+                                if qty < 1 then qty = 1 end
                                 
                                 if not price or not chance then
                                     ed_data.return_to = "admin_edit_item"
                                     showMsg("ОШИБКА", "Цена и шанс должны быть числами!", true, 4)
                                 else
                                     local item_data = {
-                                        name = ed_data.name, price = price, chance = chance,
+                                        name = ed_data.name, price = price, chance = chance, qty = qty,
                                         id = ed_data.orig_id, damage = ed_data.damage
                                     }
                                     if ed_data.is_new then
@@ -622,7 +637,6 @@ while true do
                                 for i=1, 50 do
                                     table.insert(roulette_strip, case.items[math.random(#case.items)])
                                 end
-                                -- ИСПРАВЛЕНО ТУТ: Четко фиксируем рулетку по центру 41-го слота
                                 roulette_target_pos = 41 + (math.random() * 0.5 - 0.25)
                                 roulette_strip[41] = roulette_winner
                                 ed_data.case_name = case.name
