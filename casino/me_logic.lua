@@ -7,10 +7,8 @@ local fs = require("filesystem")
 local me = {}
 me.t = nil      
 
--- Конфигурация по умолчанию. Может быть переопределена, если нужно
 me.config = { chest_side = sides.up, me_side = sides.down }
 
--- Временная база данных для цен пополнения. Загружается из файла.
 local deposit_prices = {}
 local DEPOSIT_DB_PATH = "/home/casino_deposit_prices.json"
 
@@ -28,7 +26,6 @@ local function loadDepositPrices()
     end
 end
 
--- Публичная функция для сохранения цен (может быть вызвана из админки)
 function me.saveDepositPrices(new_prices)
     if type(new_prices) ~= "table" then return false, "Неверный формат данных" end
     deposit_prices = new_prices
@@ -51,8 +48,7 @@ function me.init()
     if not me.t then return false, "Транспоузер не найден!" end
     if not component.isAvailable("me_interface") then return false, "МЭ Интерфейс не найден!" end
     
-    loadDepositPrices() -- Загружаем цены при инициализации
-    
+    loadDepositPrices()
     return true, "МЭ компоненты готовы."
 end
 
@@ -107,19 +103,21 @@ end
 
 -- Выдача призов
 function me.givePrize(item_id, item_damage, qty)
+    -- ЗАЩИТА: Если ID пустой (предмет добавили в веб-панели и забыли указать ID)
+    if not item_id or item_id == "" then
+        return false, "У предмета не указан Системный ID в настройках кейса!", 0
+    end
+
     local item_damage_num = math.floor(item_damage or 0)
     local total_moved = 0
     local last_err = "Сундук выдачи не найден или предмета нет в МЭ!"
 
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
-        
         local perfect_fingerprint = nil
         
-        -- Пробуем найти предмет в МЭ сети, чтобы получить его точные NBT-теги
         local ok_search, items = pcall(me_proxy.getItemsInNetwork, { name = item_id })
         
-        -- В некоторых версиях AE2 фильтр называется 'id', перестраховываемся
         if not ok_search or not items or #items == 0 then
             ok_search, items = pcall(me_proxy.getItemsInNetwork, { id = item_id })
         end
@@ -141,9 +139,6 @@ function me.givePrize(item_id, item_damage, qty)
                 dmg = item_damage_num
             }
         else
-            -- ВАЖНЕЙШИЙ ФИКС ЗДЕСЬ:
-            -- МЭ сеть возвращает таблицу, в которой есть только 'name', но нет 'id'.
-            -- Добавляем 'id' принудительно, чтобы exportItem не ругался!
             perfect_fingerprint.id = perfect_fingerprint.id or perfect_fingerprint.name or item_id
             perfect_fingerprint.damage = perfect_fingerprint.damage or perfect_fingerprint.dmg or item_damage_num
         end
