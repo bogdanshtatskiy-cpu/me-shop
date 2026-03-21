@@ -14,7 +14,7 @@ local files = {
 }
 
 print("=== УСТАНОВКА КАЗИНО ===")
-print("Подключение к GitHub...")
+print("Подключение к GitHub...\n")
 
 for _, file in ipairs(files) do
     io.write("Скачивание " .. file .. " ... ")
