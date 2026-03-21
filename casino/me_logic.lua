@@ -1,4 +1,4 @@
--- /lua/casino_me_logic.lua
+-- /home/casino_me_logic.lua
 local component = require("component")
 local sides = require("sides")
 local json = require("casino_json")
@@ -59,7 +59,7 @@ end
 function me.sellAllToBalance()
     if not me.t then return false, "Транспоузер не подключен!", 0 end
     local inv_size = me.t.getInventorySize(me.config.chest_side)
-    if not inv_size or inv_size == 0 then return false, "Сундук для депозита не найден!", 0 end
+    if not inv_size or inv_size == 0 then return false, "Сундук для пополнения не найден!", 0 end
 
     local total_earned = 0; local sold_stats = {}; local err_msg = nil
 
@@ -88,8 +88,8 @@ function me.sellAllToBalance()
     if total_earned > 0 then
         local receipt = ""
         for name, qty in pairs(sold_stats) do receipt = receipt .. name .. "(x" .. qty .. ") " end
-        return true, "Продано: " .. receipt, total_earned
-    else return false, "Ничего не продано. Причина: " .. tostring(err_msg or "Нет подходящих предметов или цен"), 0 end
+        return true, "Сдано: " .. receipt, total_earned
+    else return false, "Не продано. Причина: " .. tostring(err_msg or "Нет подходящих предметов или не заданы цены"), 0 end
 end
 
 function me.peekInput()
@@ -105,12 +105,12 @@ end
 -- Выдача призов
 function me.givePrize(item_id, item_damage, qty)
     local perfect_fingerprint = {
-        name = item_id, -- ИСПРАВЛЕНО: Было id, МЭ ожидает name
-        damage = math.floor(item_damage or 0) -- ИСПРАВЛЕНО: Было dmg, МЭ ожидает damage
+        name = item_id, -- ИСПРАВЛЕНО ТУТ: МЭ сеть ищет ключи name, а не id
+        damage = math.floor(item_damage or 0) -- ИСПРАВЛЕНО ТУТ: МЭ сеть ищет ключи damage, а не dmg
     }
     
     local total_moved = 0
-    local last_err = "Сундук выдачи не найден ни над одним МЭ интерфейсом!"
+    local last_err = "Сундук выдачи не найден ни над одним интерфейсом!"
 
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
