@@ -164,7 +164,6 @@ function gui.drawCaseView(case)
             local baseName = item.name .. qtyStr
             local displayName = baseName
             
-            -- Используем безопасные символы '*' вместо юникодных '★'
             if item.chance < 5 then 
                 chanceColor = config.rarity_colors.super_rare
                 displayName = "[ *** " .. unicode.upper(baseName) .. " *** ]"
@@ -390,7 +389,7 @@ end
 
 function gui.drawItemEditor(data, isDeposit)
     gui.buttons = {}
-    local w = 70; local h = isDeposit and 14 or 21 -- Увеличена высота для поля Кол-во
+    local w = 70; local h = isDeposit and 14 or 21 
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
@@ -412,7 +411,6 @@ function gui.drawItemEditor(data, isDeposit)
         local bgChance = (data.focus == "chance") and gui.COLORS.inputFocus or gui.COLORS.inputBg
         gui.btn("focus_chance", x+4, y+12, w-8, 1, data.chance .. ((data.focus == "chance") and "_" or ""), bgChance, gui.COLORS.good)
 
-        -- НОВОЕ ПОЛЕ: КОЛИЧЕСТВО
         text(x+4, y+14, "Количество предметов (шт):", gui.COLORS.text, gui.COLORS.tileBg)
         local bgQty = (data.focus == "qty") and gui.COLORS.inputFocus or gui.COLORS.inputBg
         gui.btn("focus_qty", x+4, y+15, w-8, 1, data.qty .. ((data.focus == "qty") and "_" or ""), bgQty, gui.COLORS.energy)
@@ -422,16 +420,22 @@ function gui.drawItemEditor(data, isDeposit)
     gui.btn("item_ed_cancel", x + math.floor(w/2) + 2, y + h - 4, math.floor(w/2) - 6, 3, "ОТМЕНА", gui.COLORS.bad)
 end
 
-
 function gui.drawRoulette(strip, strip_pos)
-    gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
+    gui.buttons = {} -- Отключаем клики по интерфейсу сзади
     local w, h = gpu.getResolution()
 
     local base_w, base_h = 20, 7
     local center_w, center_h = 28, 11
     local step = 24
-    
     local pointer_x = math.floor(w / 2)
+    
+    -- ОПТИМИЗАЦИЯ: Очищаем только полосу рулетки, чтобы избежать лагов term.clear()
+    local track_y = math.floor((h - center_h) / 2) - 2
+    local track_h = center_h + 4
+    
+    rect(1, track_y, w, track_h, gui.COLORS.panel)
+    rect(1, track_y, w, 1, gui.COLORS.energy) 
+    rect(1, track_y + track_h - 1, w, 1, gui.COLORS.energy) 
     
     local render_list = {}
     for i, item in ipairs(strip) do
@@ -462,16 +466,29 @@ function gui.drawRoulette(strip, strip_pos)
         local item_y = math.floor((h - cur_h) / 2)
 
         local rarity_color = gui.COLORS.label
-        if item.chance < 5 then rarity_color = config.rarity_colors.super_rare
-        elseif item.chance < 20 then rarity_color = config.rarity_colors.rare
-        elseif item.chance < 60 then rarity_color = config.rarity_colors.uncommon
-        elseif item.chance < 80 then rarity_color = config.rarity_colors.common
-        else rarity_color = config.rarity_colors.trash end
+        local rarity_text = "ОБЫЧНЫЙ"
+        
+        if item.chance < 5 then rarity_color = config.rarity_colors.super_rare; rarity_text = "★ СУПЕР ★"
+        elseif item.chance < 20 then rarity_color = config.rarity_colors.rare; rarity_text = "РЕДКИЙ"
+        elseif item.chance < 60 then rarity_color = config.rarity_colors.uncommon; rarity_text = "НЕОБЫЧ."
+        elseif item.chance < 80 then rarity_color = config.rarity_colors.common; rarity_text = "ОБЫЧНЫЙ"
+        else rarity_color = config.rarity_colors.trash; rarity_text = "ШИРПОТРЕБ" end
 
-        rect(item_start_x, item_y, cur_w, cur_h, rarity_color)
-        rect(item_start_x + 1, item_y + 1, cur_w - 2, cur_h - 2, gui.COLORS.tileBg)
+        -- НОВЫЙ ДИЗАЙН КАРТОЧЕК
+        rect(item_start_x, item_y, cur_w, cur_h, gui.COLORS.bg) -- Тень
+        
+        if dist < 0.3 then
+            -- Центральная карточка (светящаяся рамка)
+            rect(item_start_x, item_y, cur_w, cur_h, rarity_color)
+            rect(item_start_x + 1, item_y + 1, cur_w - 2, cur_h - 2, gui.COLORS.tileBg)
+            center(item_start_x, item_y + 1, cur_w, rarity_text, rarity_color, gui.COLORS.tileBg)
+        else
+            -- Обычные карточки в потоке (цветная шапка)
+            rect(item_start_x, item_y, cur_w, 2, rarity_color)
+            rect(item_start_x, item_y + 2, cur_w, cur_h - 2, gui.COLORS.tileBg)
+            center(item_start_x, item_y + 1, cur_w, rarity_text, gui.COLORS.tileBg, rarity_color)
+        end
 
-        -- Учитываем количество в названии для прокрутки
         local itemNameWithQty = item.name .. ((item.qty and item.qty > 1) and (" x" .. item.qty) or "")
 
         local lines = {}
@@ -486,7 +503,7 @@ function gui.drawRoulette(strip, strip_pos)
         end
         if curr ~= "" then table.insert(lines, curr) end
         
-        local text_y = item_y + 2
+        local text_y = item_y + 3
         for _, line in ipairs(lines) do
             if text_y < item_y + cur_h - 2 then
                 center(item_start_x, text_y, cur_w, line, gui.COLORS.text, gui.COLORS.tileBg)
@@ -498,10 +515,11 @@ function gui.drawRoulette(strip, strip_pos)
         center(item_start_x, item_y + cur_h - 2, cur_w, price_str, gui.COLORS.warn, gui.COLORS.tileBg)
     end
     
-    gpu.setBackground(gui.COLORS.bg)
-    gpu.setForeground(gui.COLORS.good)
-    gpu.set(pointer_x, math.floor((h - center_h) / 2) - 1, "▼")
-    gpu.set(pointer_x, math.floor((h + center_h) / 2) + 1, "▲")
+    -- Стрелка-указатель поверх всего
+    gpu.setBackground(gui.COLORS.panel)
+    gpu.setForeground(gui.COLORS.warn)
+    center(pointer_x - 1, track_y, 3, "▼", gui.COLORS.good, gui.COLORS.panel)
+    center(pointer_x - 1, track_y + track_h - 1, 3, "▲", gui.COLORS.good, gui.COLORS.panel)
 end
 
 function gui.checkClick(x, y)
