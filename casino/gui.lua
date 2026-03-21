@@ -189,7 +189,8 @@ end
 
 function gui.drawEditorModal(data)
     gui.buttons = {}
-    local w = 70; local h = 12
+    -- ИСПРАВЛЕНО: Увеличена высота h с 12 до 14, чтобы элементы не слипались
+    local w = 70; local h = 14
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
