@@ -102,108 +102,105 @@ function me.peekInput()
 end
 
 -- =========================================================
--- УМНАЯ ВЫДАЧА ПРИЗОВ И ДЕБАГГЕР
+-- БЕЗОПАСНАЯ ВЫДАЧА (СТРОГО УЧИТЫВАЕТ DAMAGE/ТИРЫ)
 -- =========================================================
 function me.givePrize(item_id, item_damage, qty)
     if not item_id or item_id == "" then
-        return false, "У предмета не указан Системный ID!", 0
+        return false, "У предмета не указан Системный ID в настройках кейса!", 0
     end
 
     local item_damage_num = math.floor(item_damage or 0)
     local total_moved = 0
-    
-    local debug_log = "--- ДЕБАГ ВЫДАЧИ: " .. item_id .. ":" .. item_damage_num .. " (Кол-во: " .. qty .. ") ---\n"
-    local last_real_error = "Сундук не найден или предмет отсутствует в МЭ."
+    local last_err = "Сундук выдачи не найден или предмета нет в МЭ!"
+    local no_chest_found = true
+
+    local directions = {"DOWN", "UP", "NORTH", "SOUTH", "WEST", "EAST"}
 
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
-        debug_log = debug_log .. "-> Проверка МЭ Интерфейса: " .. addr:sub(1,8) .. "\n"
-
-        -- 1. ИЩЕМ ПРЕДМЕТ В СЕТИ (чтобы скопировать NBT-теги энергии)
-        local found_items = nil
-        local ok_s, res_s = pcall(me_proxy.getItemsInNetwork, { name = item_id, damage = item_damage_num })
-        if not ok_s or type(res_s) ~= "table" or #res_s == 0 then
-            ok_s, res_s = pcall(me_proxy.getItemsInNetwork, { id = item_id, damage = item_damage_num })
+        
+        -- Базовый чистый отпечаток (с ЖЕСТКОЙ привязкой к Damage)
+        local fingerprints_to_try = {
+            { id = item_id, name = item_id, damage = item_damage_num, dmg = item_damage_num }
+        }
+        
+        -- УМНЫЙ ПОИСК В МЭ: Ищем этот же ID, фильтруем по Damage и берем их NBT-теги
+        local ok_search, items = pcall(me_proxy.getItemsInNetwork, { name = item_id })
+        if not ok_search or not items or #items == 0 then
+            ok_search, items = pcall(me_proxy.getItemsInNetwork, { id = item_id })
         end
-
-        if ok_s and type(res_s) == "table" and #res_s > 0 then
-            found_items = res_s
-            local total_in_me = 0
-            for _, it in ipairs(res_s) do total_in_me = total_in_me + (it.size or 0) end
-            debug_log = debug_log .. "[V] В МЭ сети найдено: " .. total_in_me .. " шт. (Вариантов NBT: " .. #res_s .. ")\n"
-        else
-            debug_log = debug_log .. "[X] Предмет не найден в МЭ сети по этому ID и Урону!\n"
-            last_real_error = "В МЭ сети нет предмета с ID: " .. item_id .. ":" .. item_damage_num
-        end
-
-        -- 2. ПОДГОТОВКА ОТПЕЧАТКОВ (Сначала чистый, потом с NBT)
-        local fp_clean = { id = item_id, name = item_id, damage = item_damage_num, dmg = item_damage_num }
-        local fingerprints_to_try = { fp_clean }
-
-        if found_items then
-            for i = 1, math.min(3, #found_items) do -- Берем до 3 вариантов предмета с разной энергией
-                local fp_full = found_items[i]
-                fp_full.id = fp_full.id or fp_full.name or item_id
-                fp_full.damage = fp_full.damage or fp_full.dmg or item_damage_num
-                table.insert(fingerprints_to_try, fp_full)
+        
+        if ok_search and type(items) == "table" then
+            for _, item in pairs(items) do
+                -- СТРОГАЯ ПРОВЕРКА: Совпадает и ID, и Damage (урон/тир панели)
+                if type(item) == "table" and (item.name == item_id or item.id == item_id) and math.floor(item.damage or item.dmg or 0) == item_damage_num then
+                    -- Копируем этот предмет, чтобы сохранить его NBT
+                    local fp = {}
+                    for k, v in pairs(item) do fp[k] = v end
+                    fp.id = fp.id or fp.name or item_id
+                    fp.damage = item_damage_num
+                    table.insert(fingerprints_to_try, fp)
+                end
             end
         end
 
-        -- 3. ПОПЫТКА ВЫДАЧИ
-        local success_side = -1
-        for side = 0, 5 do
-            for fp_idx, fp in ipairs(fingerprints_to_try) do
-                local ok, result = pcall(me_proxy.exportItem, fp, side, qty)
+        local success_dir = nil
+        local success_fp = nil
+
+        for _, dir in ipairs(directions) do
+            -- Перебираем наши отпечатки (все они строго с нужным Damage!)
+            for _, fp in ipairs(fingerprints_to_try) do
+                local ok, result = pcall(me_proxy.exportItem, fp, dir, qty)
                 local moved_now = 0
                 
                 if ok and type(result) == "table" and result.size then moved_now = result.size
                 elseif ok and type(result) == "number" then moved_now = result end
                 
                 if moved_now > 0 then
-                    debug_log = debug_log .. "[V] УСПЕХ: Сторона " .. side .. ", Отпечаток #" .. fp_idx .. ", Выдано: " .. moved_now .. "\n"
                     total_moved = total_moved + moved_now
-                    success_side = side
-                    break -- Выходим из перебора отпечатков, мы нашли нужный!
+                    success_dir = dir
+                    success_fp = fp
+                    no_chest_found = false
+                    break
                 elseif not ok then
                     local err_str = tostring(result)
-                    -- ИГНОРИРУЕМ ФАНТОМНУЮ ОШИБКУ ПУСТЫХ СТОРОН
-                    if not err_str:match("No neighbour attached") then
-                        last_real_error = err_str
-                        debug_log = debug_log .. "[X] Ошибка (Сторона " .. side .. "): " .. err_str .. "\n"
+                    if err_str:match("No neighbour attached") then
+                        -- Просто пустая сторона, идем дальше
+                    else
+                        last_err = err_str
+                        no_chest_found = false
                     end
                 end
             end
             
-            -- Если начали выдавать, но нужно довыдать стак
+            -- Если выдача началась, добиваем остаток (если стак большой)
             if total_moved > 0 and total_moved < qty then
                 local attempts = 0
-                while total_moved < qty and attempts < 20 do
+                while total_moved < qty and attempts < 150 do
                     local batch = qty - total_moved
-                    local ok_b, res_b = pcall(me_proxy.exportItem, fingerprints_to_try[1], success_side, batch)
+                    local ok2, res2 = pcall(me_proxy.exportItem, success_fp, success_dir, batch)
                     local m2 = 0
-                    if ok_b and type(res_b) == "table" and res_b.size then m2 = res_b.size
-                    elseif ok_b and type(res_b) == "number" then m2 = res_b end
+                    if ok2 and type(res2) == "table" and res2.size then m2 = res2.size
+                    elseif ok2 and type(res2) == "number" then m2 = res2 end
                     
                     if m2 > 0 then total_moved = total_moved + m2 else break end
                     attempts = attempts + 1
                 end
-                break -- Выходим из перебора сторон
+                break -- Выходим из цикла сторон
             end
             
             if total_moved >= qty then break end
         end
-        
         if total_moved > 0 then break end
     end
     
     if total_moved > 0 then 
         return true, "Успешно", total_moved
     else 
-        -- ЗАПИСЫВАЕМ ПОДРОБНЫЙ ОТЧЕТ В ФАЙЛ
-        local f = io.open("/home/casino_debug_prize.txt", "w")
-        if f then f:write(debug_log); f:close() end
-        
-        return false, last_real_error .. " (Детали лога: /home/casino_debug_prize.txt)", 0 
+        if no_chest_found then
+            last_err = "К МЭ Интерфейсу вплотную не приставлен сундук!"
+        end
+        return false, "Ошибка: " .. last_err, 0 
     end
 end
 
