@@ -100,9 +100,6 @@ function me.peekInput()
     return nil, "Положите предмет в сундук!"
 end
 
--- =========================================================
--- УНИВЕРСАЛЬНАЯ ВЫДАЧА (Защита от мусора + Живые объекты)
--- =========================================================
 function me.givePrize(item_id, item_damage, qty)
     if not item_id or item_id == "" then
         return false, "У предмета не указан Системный ID!", 0
@@ -118,7 +115,6 @@ function me.givePrize(item_id, item_damage, qty)
         local me_proxy = component.proxy(addr)
         local matching_items = {}
         
-        -- Получаем ЖИВЫЕ объекты из МЭ сети
         local ok_s, items = pcall(me_proxy.getItemsInNetwork, { name = item_id })
         if not ok_s or not items or type(items) ~= "table" then
             ok_s, items = pcall(me_proxy.getItemsInNetwork, { id = item_id })
@@ -126,12 +122,10 @@ function me.givePrize(item_id, item_damage, qty)
         
         if ok_s and type(items) == "table" then
             for _, item in pairs(items) do
-                -- ЗАЩИТА: Проверяем, что item это таблица, а не скрытое системное число
+                -- ЖЕЛЕЗОБЕТОННАЯ ЗАЩИТА: Игнорируем мусорные числа вроде n = 11
                 if type(item) == "table" then
                     local current_name = item.name or item.id or ""
-                    -- Строго проверяем совпадение ID и Урона
                     if current_name == item_id and math.floor(item.damage or 0) == item_damage_num then
-                        -- Аккуратно добавляем id прямо в живой объект
                         pcall(function() item.id = item.id or item.name end)
                         table.insert(matching_items, item)
                     end
@@ -139,7 +133,6 @@ function me.givePrize(item_id, item_damage, qty)
             end
         end
         
-        -- Если МЭ сеть временно пустая или предмет обычный, добавляем резервный чистый слепок
         if #matching_items == 0 then
             table.insert(matching_items, { id = item_id, name = item_id, damage = item_damage_num })
         end
@@ -170,7 +163,6 @@ function me.givePrize(item_id, item_damage, qty)
                 end
             end
             
-            -- Добиваем нужное количество
             if total_moved > 0 and total_moved < qty then
                 local attempts = 0
                 while total_moved < qty and attempts < 100 do
