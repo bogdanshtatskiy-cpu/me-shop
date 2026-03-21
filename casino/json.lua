@@ -1,8 +1,6 @@
--- /lua/casino_json.lua
--- Надежная библиотека для работы с JSON в OpenComputers
+-- /home/casino_json.lua
 local json = {}
 
--- === КОДИРОВАНИЕ В JSON (Lua -> JSON) ===
 local function escape_str(s)
   return s:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r")
 end
@@ -25,7 +23,6 @@ function json.encode(v)
     end
     
     if is_array then
-      if max == 0 then return "[]" end -- Пустой массив
       local parts = {}
       for i = 1, max do
         parts[i] = json.encode(v[i])
@@ -43,7 +40,6 @@ function json.encode(v)
   end
 end
 
--- === ДЕКОДИРОВАНИЕ ИЗ JSON (JSON -> Lua) ===
 local function create_set(...)
   local res = {}
   for i = 1, select("#", ...) do res[select(i, ...)] = true end
@@ -53,13 +49,12 @@ end
 local space_chars = create_set(" ", "\t", "\r", "\n")
 local delim_chars = create_set(" ", "\t", "\r", "\n", "]", "}", ",")
 local escape_char_map = { ["\\"] = "\\", ["\""] = "\"", ["b"] = "\b", ["f"] = "\f", ["n"] = "\n", ["r"] = "\r", ["t"] = "\t" }
-local literal_map = { ["true"] = true, ["false"] = false, ["null"] = nil }
 
 local function parse(str, pos)
   while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
   local c = str:sub(pos, pos)
   
-  if c == '"' then -- Строки
+  if c == '"' then
     local res = ""
     local i = pos + 1
     while i <= #str do
@@ -75,8 +70,7 @@ local function parse(str, pos)
       end
     end
     error("Незакрытая строка на позиции " .. pos)
-  
-  elseif c == "[" then -- Массивы
+  elseif c == "[" then
     local res = {}
     pos = pos + 1
     while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
@@ -91,8 +85,7 @@ local function parse(str, pos)
       if next_char ~= "," then error("Ожидалась ',' или ']' на позиции " .. pos) end
       pos = pos + 1
     end
-    
-  elseif c == "{" then -- Объекты (Таблицы)
+  elseif c == "{" then
     local res = {}
     pos = pos + 1
     while space_chars[str:sub(pos, pos)] do pos = pos + 1 end
@@ -113,17 +106,17 @@ local function parse(str, pos)
       if next_char ~= "," then error("Ожидалась ',' или '}' на позиции " .. pos) end
       pos = pos + 1
     end
-    
-  else -- Числа, Булевы значения, Null
+  else
     local start_pos = pos
     while pos <= #str and not delim_chars[str:sub(pos, pos)] do pos = pos + 1 end
     local val_str = str:sub(start_pos, pos - 1)
-    
-    local literal = literal_map[val_str]
-    if literal ~= nil or val_str == "null" then return literal, pos end
-
-    local num = tonumber(val_str)
-    if num then return num, pos else error("Неверное значение '" .. val_str .. "' на позиции " .. start_pos) end
+    if val_str == "true" then return true, pos
+    elseif val_str == "false" then return false, pos
+    elseif val_str == "null" then return nil, pos
+    else
+      local num = tonumber(val_str)
+      if num then return num, pos else error("Неверное значение '" .. val_str .. "' на позиции " .. start_pos) end
+    end
   end
 end
 
