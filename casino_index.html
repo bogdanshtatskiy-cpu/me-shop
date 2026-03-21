@@ -196,6 +196,7 @@
 
                     let itemsHtml = '';
                     items.forEach((item, itemIndex) => {
+                         let qty = item.qty || 1;
                          itemsHtml += `
                             <div class="p-3 bg-gray-800 rounded-md border-l-4 ${getRarityColor(item.chance)}">
                                 <div class="flex flex-col md:flex-row md:items-center gap-4">
@@ -206,6 +207,10 @@
                                     <div class="w-full md:w-32">
                                         <label class="text-xs text-gray-400 block mb-1">Цена предмета</label>
                                         <input type="number" id="price-${caseIndex}-${itemIndex}" value="${item.price}" class="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-purple-500">
+                                    </div>
+                                    <div class="w-full md:w-20">
+                                        <label class="text-xs text-gray-400 block mb-1">Кол-во</label>
+                                        <input type="number" id="qty-${caseIndex}-${itemIndex}" value="${qty}" class="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-purple-500">
                                     </div>
                                     <div class="w-full md:w-24">
                                         <label class="text-xs text-gray-400 block mb-1">Шанс (%)</label>
@@ -239,7 +244,6 @@
                             <div class="space-y-3 mb-6">${itemsHtml}</div>
 
                             <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                
                                 <div class="bg-gray-900 p-5 rounded-lg border border-gray-700 relative">
                                     <h4 class="font-semibold mb-3 text-blue-400 text-lg">Симулятор открытий (1000 раз)</h4>
                                     <button onclick="runSimulation(${caseIndex})" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded transition shadow mb-4">Запустить тест</button>
@@ -262,7 +266,6 @@
                                     </div>
                                     <div id="advice-result-${caseIndex}"></div>
                                 </div>
-
                             </div>
                         </div>
                     `;
@@ -318,6 +321,7 @@
                 items.forEach((item, itemIndex) => {
                     item.name = document.getElementById(`name-${caseIndex}-${itemIndex}`).value;
                     item.price = Number(document.getElementById(`price-${caseIndex}-${itemIndex}`).value);
+                    item.qty = Number(document.getElementById(`qty-${caseIndex}-${itemIndex}`).value) || 1;
                     item.chance = Number(document.getElementById(`chance-${caseIndex}-${itemIndex}`).value);
                 });
                 
@@ -327,7 +331,6 @@
             });
         }
         
-        // ОБНОВЛЕННЫЙ СИМУЛЯТОР ПО ПРЕДМЕТАМ
         window.runSimulation = function(caseIndex) {
             const casePrice = Number(document.getElementById(`case-price-${caseIndex}`).value);
             const items = [];
@@ -336,21 +339,23 @@
                 items.push({
                     name: document.getElementById(`name-${caseIndex}-${i}`).value,
                     price: Number(document.getElementById(`price-${caseIndex}-${i}`).value),
+                    qty: Number(document.getElementById(`qty-${caseIndex}-${i}`).value) || 1,
                     chance: Number(document.getElementById(`chance-${caseIndex}-${i}`).value)
                 });
                 i++;
             }
             
             let totalChance = items.reduce((sum, it) => sum + it.chance, 0);
-            
             const numSimulations = 1000;
             let totalSpentByUser = casePrice * numSimulations;
             let totalGivenByCasino = 0;
             
             let itemStats = {};
-            items.forEach(it => itemStats[it.name] = { count: 0, val: 0, color: getRarityColor(it.chance) });
+            items.forEach(it => {
+                let displayName = it.name + (it.qty > 1 ? ` x${it.qty}` : '');
+                itemStats[displayName] = { count: 0, val: 0 };
+            });
 
-            // Крутим рулетку 1000 раз
             for (let j = 0; j < numSimulations; j++) {
                 const randomNum = Math.random() * totalChance;
                 let cumulative = 0;
@@ -358,8 +363,9 @@
                     cumulative += item.chance;
                     if (randomNum <= cumulative) {
                         totalGivenByCasino += item.price;
-                        itemStats[item.name].count++;
-                        itemStats[item.name].val += item.price;
+                        let displayName = item.name + (item.qty > 1 ? ` x${item.qty}` : '');
+                        itemStats[displayName].count++;
+                        itemStats[displayName].val += item.price;
                         break;
                     }
                 }
@@ -381,7 +387,6 @@
                         <tbody class="divide-y divide-gray-700">
             `;
             
-            // Сортируем вывод по убыванию выпадений
             let sortedItems = Object.keys(itemStats).sort((a,b) => itemStats[b].count - itemStats[a].count);
             for(let name of sortedItems) {
                 let stat = itemStats[name];
@@ -392,7 +397,6 @@
             statHtml += `</tbody></table></div>`;
             document.getElementById(`sim-result-${caseIndex}`).innerHTML = statHtml;
             
-            // График по именам
             const chartCtx = document.getElementById(`chart-${caseIndex}`).getContext('2d');
             if(window.charts && window.charts[caseIndex]) window.charts[caseIndex].destroy();
             if(!window.charts) window.charts = {};
@@ -416,11 +420,9 @@
             });
         }
 
-        // АЛГОРИТМ СОВЕТНИКА БАЛАНСИРОВКИ
         window.adviseChances = function(caseIndex) {
             const casePrice = Number(document.getElementById(`case-price-${caseIndex}`).value);
             const targetTotalProfit = Number(document.getElementById(`target-profit-${caseIndex}`).value); 
-            // Целевое матожидание (стоимость приза) = Цена кейса - (Прибыль за 1000 / 1000)
             const targetEV = casePrice - (targetTotalProfit / 1000);
 
             const items = [];
@@ -443,15 +445,14 @@
             const advDiv = document.getElementById(`advice-result-${caseIndex}`);
 
             if (targetEV < minPrice) {
-                advDiv.innerHTML = `<div class="text-red-400 bg-red-900 bg-opacity-20 p-3 rounded text-sm mt-3 border border-red-800"><b>Невозможно!</b> Самый дешевый предмет в кейсе стоит ${minPrice} ЭМ. Вы будете уходить в минус при любых шансах. Добавьте более дешевый лут.</div>`;
+                advDiv.innerHTML = `<div class="text-red-400 bg-red-900 bg-opacity-20 p-3 rounded text-sm mt-3 border border-red-800"><b>Невозможно!</b> Самый дешевый предмет стоит ${minPrice} ЭМ. Вы будете в минусе при любых шансах.</div>`;
                 return;
             }
             if (targetEV > maxPrice) {
-                advDiv.innerHTML = `<div class="text-red-400 bg-red-900 bg-opacity-20 p-3 rounded text-sm mt-3 border border-red-800"><b>Невозможно!</b> Самый дорогой предмет стоит ${maxPrice} ЭМ. Игрок никогда не сможет окупить кейс до такого уровня.</div>`;
+                advDiv.innerHTML = `<div class="text-red-400 bg-red-900 bg-opacity-20 p-3 rounded text-sm mt-3 border border-red-800"><b>Невозможно!</b> Самый дорогой предмет стоит ${maxPrice} ЭМ. Игрок не сможет окупить кейс.</div>`;
                 return;
             }
 
-            // Разделяем предметы на дорогие (убыточные для казино) и дешевые (прибыльные для казино)
             let goodItems = items.filter(it => it.price >= targetEV);
             let badItems = items.filter(it => it.price < targetEV);
 
@@ -460,22 +461,18 @@
                  return;
             }
 
-            // Считаем текущий средний вес групп, чтобы не ломать внутреннюю редкость
             let sumGoodChance = goodItems.reduce((s, it) => s + it.chance, 0) || 1;
             let sumBadChance = badItems.reduce((s, it) => s + it.chance, 0) || 1;
-
             let evGood = goodItems.reduce((s, it) => s + (it.price * it.chance), 0) / sumGoodChance;
             let evBad = badItems.reduce((s, it) => s + (it.price * it.chance), 0) / sumBadChance;
 
             if (Math.abs(evGood - evBad) < 0.01) {
-                 advDiv.innerHTML = `<div class="text-yellow-400 text-sm mt-3 p-2 bg-gray-800 rounded">Разница в ценах слишком мала для балансировки.</div>`;
+                 advDiv.innerHTML = `<div class="text-yellow-400 text-sm mt-3 p-2 bg-gray-800 rounded">Разница в ценах слишком мала.</div>`;
                  return;
             }
 
-            // Математика баланса весов
             let wGood = 100 * (targetEV - evBad) / (evGood - evBad);
             let wBad = 100 - wGood;
-
             let newChancesArray = [];
             let htmlList = `<ul class="text-sm space-y-1.5 mb-4 max-h-40 overflow-y-auto custom-scrollbar pr-2">`;
 
@@ -489,7 +486,6 @@
                 newC = Math.max(0.001, newC); 
                 newChancesArray.push(newC.toFixed(3));
                 
-                // Визуально подчеркнем изменение
                 let diff = newC - item.chance;
                 let arrow = diff > 0 ? `<span class="text-green-500 text-xs">▲</span>` : `<span class="text-red-500 text-xs">▼</span>`;
                 if(Math.abs(diff) < 0.01) arrow = `<span class="text-gray-500 text-xs">=</span>`;
@@ -506,7 +502,6 @@
                     <div class="text-xs text-gray-400 mb-3 uppercase tracking-wider font-bold">Идеальные шансы подобраны:</div>
                     ${htmlList}
                     <button onclick="applyAdvice(${caseIndex}, [${newChancesArray}])" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded transition shadow-lg flex justify-center items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                         Применить новые шансы
                     </button>
                 </div>
@@ -523,7 +518,7 @@
                 }
             });
             document.getElementById(`advice-result-${caseIndex}`).innerHTML = '';
-            showToast('Шансы изменены! Обязательно нажмите "Сохранить кейс".', 'success');
+            showToast('Шансы изменены! Нажмите "Сохранить кейс".', 'success');
         }
 
         function showToast(message, type) {
