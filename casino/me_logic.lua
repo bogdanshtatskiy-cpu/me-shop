@@ -102,7 +102,7 @@ function me.peekInput()
 end
 
 -- =========================================================
--- БЕЗОПАСНАЯ И УМНАЯ ВЫДАЧА (Solar Panels + Draconic Evolution)
+-- ХОД КОНЕМ: ВЫДАЧА ЧЕРЕЗ БД И ТРАНСПОУЗЕР
 -- =========================================================
 function me.givePrize(item_id, item_damage, qty)
     if not item_id or item_id == "" then
@@ -110,77 +110,110 @@ function me.givePrize(item_id, item_damage, qty)
     end
 
     local item_damage_num = math.floor(item_damage or 0)
-    local total_moved = 0
-    local last_err = "Сундук не найден или предмета нет в МЭ!"
-    local no_chest_found = true
-
-    local directions = {"DOWN", "UP", "NORTH", "SOUTH", "WEST", "EAST"}
     
-    -- 1. СТРОГИЙ отпечаток (для панелей и обычных вещей, учитывает Damage)
-    local strict_fp = { id = item_id, name = item_id, damage = item_damage_num, dmg = item_damage_num }
-    -- 2. ГИБКИЙ отпечаток (для брони и механизмов с энергией, игнорирует NBT)
-    local wildcard_fp = { id = item_id, name = item_id }
-
-    for addr in component.list("me_interface") do
-        local me_proxy = component.proxy(addr)
-        
-        -- Узнаем, есть ли у предмета в МЭ сети скрытые NBT-теги (заряд/энергия)
-        local has_nbt = false
-        local ok_search, items = pcall(me_proxy.getItemsInNetwork, { name = item_id })
-        if not ok_search or not items or #items == 0 then
-            ok_search, items = pcall(me_proxy.getItemsInNetwork, { id = item_id })
-        end
-        
-        if ok_search and type(items) == "table" then
-            for _, item in pairs(items) do
-                if type(item) == "table" and (item.name == item_id or item.id == item_id) and math.floor(item.damage or item.dmg or 0) == item_damage_num then
-                    if item.hasTag then
-                        has_nbt = true
-                        break
-                    end
+    -- Ищем Сундук выдачи на свободных сторонах Транспоузера
+    local prize_chest_side = nil
+    if me.t then
+        for s = 0, 5 do
+            if s ~= me.config.chest_side and s ~= me.config.me_side then
+                local ok, size = pcall(me.t.getInventorySize, s)
+                if ok and size and size > 0 then
+                    prize_chest_side = s
+                    break
                 end
             end
         end
+    end
 
+    -- 1. ИДЕАЛЬНОЕ РЕШЕНИЕ: БАЗА ДАННЫХ + ТРАНСПОУЗЕР (Обход бага NBT)
+    local db = component.isAvailable("database") and component.database or nil
+    local target_db_slot = nil
+    
+    if db then
+        for i = 1, db.getSize() do
+            local db_item = db.get(i)
+            if db_item and (string.lower(db_item.name) == string.lower(item_id) or string.lower(db_item.id or "") == string.lower(item_id)) then
+                target_db_slot = i
+                break
+            end
+        end
+    end
+
+    -- Если предмет лежит в Базе Данных и Сундук выдачи найден Транспоузером
+    if target_db_slot and prize_chest_side and me.t then
+        for addr in component.list("me_interface") do
+            local me_proxy = component.proxy(addr)
+            
+            -- Настраиваем 1-й слот конфигурации МЭ интерфейса на выдачу из БД
+            pcall(me_proxy.setInterfaceConfiguration, 1, db.address, target_db_slot, qty)
+            
+            -- Даем МЭ сети полсекунды перекинуть предмет во внутренний буфер
+            os.sleep(0.5)
+            
+            local moved = 0
+            local ok_size, int_size = pcall(me.t.getInventorySize, me.config.me_side)
+            if ok_size and int_size then
+                for slot = 1, int_size do
+                    local stack = me.t.getStackInSlot(me.config.me_side, slot)
+                    if stack and (string.lower(stack.name) == string.lower(item_id) or string.lower(stack.id or "") == string.lower(item_id)) then
+                        local m = me.t.transferItem(me.config.me_side, prize_chest_side, qty - moved, slot)
+                        if type(m) == "number" then moved = moved + m
+                        elseif type(m) == "boolean" and m then moved = moved + stack.size end
+                        if moved >= qty then break end
+                    end
+                end
+            end
+            
+            -- Очищаем конфигурацию, чтобы предметы больше не сосало
+            pcall(me_proxy.setInterfaceConfiguration, 1)
+            
+            if moved > 0 then
+                return true, "Успешно выдано!", moved
+            end
+        end
+    end
+
+    -- 2. РЕЗЕРВНЫЙ МЕТОД (exportItem) ДЛЯ ОБЫЧНЫХ ВЕЩЕЙ (Панели, блоки и т.д.)
+    local total_moved = 0
+    local last_err = "Предмета нет в МЭ или Сундук выдачи не найден."
+    local no_chest_found = true
+    local directions = {"DOWN", "UP", "NORTH", "SOUTH", "WEST", "EAST"}
+    
+    local fingerprints_to_try = {
+        { id = item_id, damage = item_damage_num },
+        { name = item_id, damage = item_damage_num },
+        { id = item_id, damage = 32767 },
+        { id = item_id }
+    }
+
+    for addr in component.list("me_interface") do
+        local me_proxy = component.proxy(addr)
         local success_dir = nil
         local success_fp = nil
 
         for _, dir in ipairs(directions) do
-            -- ШАГ 1: Всегда сначала пробуем строгий запрос (с проверкой Damage)
-            local ok, result = pcall(me_proxy.exportItem, strict_fp, dir, qty)
-            local moved_now = 0
-            
-            if ok and type(result) == "table" and result.size then moved_now = result.size
-            elseif ok and type(result) == "number" then moved_now = result end
-            
-            if moved_now > 0 then
-                success_fp = strict_fp
-            elseif not ok then
-                local err_str = tostring(result)
-                if not err_str:match("No neighbour attached") then
-                    last_err = err_str
-                    no_chest_found = false
-                end
-            end
-
-            -- ШАГ 2: Если строгий не сработал (из-за энергии/NBT), сундук точно есть, и мы знаем что это вещь с NBT
-            if moved_now == 0 and has_nbt and not no_chest_found then
-                ok, result = pcall(me_proxy.exportItem, wildcard_fp, dir, qty)
+            for _, fp in ipairs(fingerprints_to_try) do
+                local ok, result = pcall(me_proxy.exportItem, fp, dir, qty)
+                local moved_now = 0
+                
                 if ok and type(result) == "table" and result.size then moved_now = result.size
                 elseif ok and type(result) == "number" then moved_now = result end
                 
                 if moved_now > 0 then
-                    success_fp = wildcard_fp
+                    total_moved = total_moved + moved_now
+                    success_dir = dir
+                    success_fp = fp
+                    no_chest_found = false
+                    break
+                elseif not ok then
+                    local err_str = tostring(result)
+                    if not err_str:match("No neighbour attached") then
+                        last_err = err_str
+                        no_chest_found = false
+                    end
                 end
             end
             
-            if moved_now > 0 then
-                total_moved = total_moved + moved_now
-                success_dir = dir
-                no_chest_found = false
-            end
-            
-            -- Если начали выдавать, добиваем стак
             if total_moved > 0 and total_moved < qty then
                 local attempts = 0
                 while total_moved < qty and attempts < 150 do
@@ -193,9 +226,8 @@ function me.givePrize(item_id, item_damage, qty)
                     if m2 > 0 then total_moved = total_moved + m2 else break end
                     attempts = attempts + 1
                 end
-                break -- Выходим из цикла сторон
+                break
             end
-            
             if total_moved >= qty then break end
         end
         if total_moved > 0 then break end
@@ -205,7 +237,7 @@ function me.givePrize(item_id, item_damage, qty)
         return true, "Успешно", total_moved
     else 
         if no_chest_found then
-            last_err = "К МЭ Интерфейсу не приставлен сундук вплотную!"
+            last_err = "К МЭ Интерфейсу вплотную не приставлен сундук!"
         end
         return false, "Ошибка: " .. last_err, 0 
     end
