@@ -164,8 +164,7 @@
                             <span>+ Создать кейс</span>
                         </button>
                     </div>
-                    <div id="cases-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        </div>
+                    <div id="cases-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"></div>
                 </div>
 
                 <div id="case-editor-view" class="hidden">
@@ -175,8 +174,7 @@
                         </button>
                         <h2 class="text-2xl font-black text-white">Редактор кейса</h2>
                     </div>
-                    <div id="case-editor-container">
-                        </div>
+                    <div id="case-editor-container"></div>
                 </div>
             </div>
 
@@ -209,11 +207,10 @@
         const db = firebase.database();
         const DB_PATH = 'casino';
 
-        // Глобальное состояние
         let globalUsers = {};
         let globalCases = [];
-        let globalLogs = []; // Последние 200 логов для таблицы
-        let globalAllLogs = []; // Все логи базы для точной аналитики
+        let globalLogs = []; 
+        let globalAllLogs = []; 
         let editingCaseIndex = null; 
         let topSpendersChartObj = null;
 
@@ -263,16 +260,14 @@
                 updateAnalytics();
             }
         }
-        
+
         function initDataListeners() {
-            // Слушаем Игроков (Оборот и балансы)
             db.ref(`${DB_PATH}/users`).on('value', (snapshot) => {
                 globalUsers = snapshot.val() || {};
                 renderUsers();
                 updateAnalytics();
             });
 
-            // Слушаем Кейсы (Для цен предметов)
             db.ref(`${DB_PATH}/data/cases`).on('value', (snapshot) => {
                 globalCases = snapshot.val() || [];
                 if (editingCaseIndex === null) {
@@ -281,24 +276,19 @@
                 updateAnalytics();
             });
 
-            // Слушаем Логи (Скачиваем ВСЮ историю для точной аналитики)
             db.ref(`${DB_PATH}/logs`).on('value', (snapshot) => {
                 const logsRaw = snapshot.val() || {};
                 globalAllLogs = [];
                 for (const key in logsRaw) { 
                     globalAllLogs.push(logsRaw[key]); 
                 }
-                
-                // Для таблицы в UI оставляем только последние 200 (чтобы не лагал браузер)
                 let reversedLogs = [...globalAllLogs].reverse();
                 globalLogs = reversedLogs.slice(0, 200); 
-                
                 renderLogs();
                 updateAnalytics();
             });
         }
 
-        // ================= АНАЛИТИКА =================
         function updateAnalytics() {
             let totalSpent = 0;
             let totalBalances = 0;
@@ -313,19 +303,16 @@
                 topSpenders.push({ name: name, spent: data.spent || 0 });
             }
 
-            // ФАКТИЧЕСКИ ВЫДАНО ПРИЗАМИ (Считаем реальные победы по логам)
             let exactTotalGiven = 0;
             
             globalAllLogs.forEach(log => {
                 if (log.action === "ВЫИГРЫШ" && log.details) {
-                    // Парсим регуляркой: "Выиграл Название (x1) из кейса Имя"
                     const match = log.details.match(/Выиграл (.*) \(x(\d+)\) из кейса (.*)/);
                     if (match) {
                         const itemName = match[1];
                         const caseName = match[3];
 
                         let itemPrice = 0;
-                        // Ищем этот предмет в текущих кейсах, чтобы узнать его цену
                         let found = false;
                         for (const c of globalCases) {
                             if (c && c.name === caseName && c.items) {
@@ -333,7 +320,6 @@
                                 if (fItem) { itemPrice = Number(fItem.price) || 0; found = true; break; }
                             }
                         }
-                        // Если кейс переименовали, ищем предмет по всем кейсам
                         if (!found) {
                             for (const c of globalCases) {
                                 if (c && c.items) {
@@ -342,14 +328,11 @@
                                 }
                             }
                         }
-                        
-                        // Добавляем к выданному (цена указывается за весь выбитый слот)
                         exactTotalGiven += itemPrice; 
                     }
                 }
             });
 
-            // Математика Фактической Прибыли
             let realCasinoProfit = totalSpent - exactTotalGiven;
             let totalDeposited = totalSpent + totalBalances;
             let rtp = totalSpent > 0 ? (exactTotalGiven / totalSpent) * 100 : 0;
@@ -365,7 +348,7 @@
             const heroTitle = document.getElementById('hero-title');
             const heroSub = document.getElementById('hero-subtitle');
 
-            heroBox.classList.remove('bg-green-600', 'bg-red-600', 'bg-gray-800', 'shadow-green-500/50', 'shadow-red-500/50', 'border-green-400/50', 'border-red-400/50');
+            heroBox.classList.remove('bg-green-600', 'bg-red-600', 'bg-gray-800', 'shadow-green-500/40', 'shadow-red-500/40', 'border-green-400/50', 'border-red-400/50');
             
             if (totalSpent === 0) {
                 heroBox.classList.add('bg-gray-800');
@@ -384,7 +367,6 @@
                 heroSub.innerText = "ФАКТИЧЕСКИЙ УБЫТОК КАЗИНО";
             }
 
-            // График ТОП-10
             topSpenders.sort((a,b) => b.spent - a.spent);
             let top10 = topSpenders.slice(0, 10);
             
@@ -410,7 +392,6 @@
             });
         }
 
-        // ================= ИГРОКИ =================
         function renderUsers() {
             const list = document.getElementById('users-list');
             list.innerHTML = '';
@@ -435,7 +416,6 @@
             }
         }
 
-        // ================= КЕЙСЫ (СЕТКА) =================
         function renderCasesGrid() {
             document.getElementById('cases-grid-view').classList.remove('hidden');
             document.getElementById('case-editor-view').classList.add('hidden');
@@ -465,7 +445,7 @@
                                 Предметов внутри: <span class="text-gray-200 font-bold">${items.length}</span>
                             </div>
                             <div class="bg-gray-900/80 rounded p-2 text-xs font-mono border border-gray-700/50 mb-5">
-                                Профит/открытие:<br>
+                                Матожидание профита/открытие:<br>
                                 <span class="font-bold text-sm ${pColor}">${pSign}${profitPerOpen.toFixed(2)} ЭМ</span>
                             </div>
                         </div>
@@ -475,7 +455,6 @@
             });
         }
 
-        // ================= РЕДАКТОР КЕЙСА =================
         window.createNewCase = function() {
             let newCase = { name: "Новый кейс", price: 100, items: [] };
             globalCases.push(newCase);
@@ -581,7 +560,7 @@
                                 <thead>
                                     <tr class="text-xs text-gray-400 border-b border-gray-700 bg-gray-900/30">
                                         <th class="pb-2 pt-2 pr-2 font-semibold">Название</th>
-                                        <th class="pb-2 pt-2 px-2 w-32 font-semibold">Цена слота</th>
+                                        <th class="pb-2 pt-2 px-2 w-32 font-semibold">Цена куша (слота)</th>
                                         <th class="pb-2 pt-2 px-2 w-24 font-semibold">Кол-во</th>
                                         <th class="pb-2 pt-2 px-2 w-32 font-semibold">Шанс (%)</th>
                                         <th class="pb-2 pt-2 pl-2 w-16 text-center font-semibold">Удал.</th>
@@ -608,8 +587,10 @@
                     </div>
 
                     <div class="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6 flex flex-col h-fit">
-                        <h4 class="font-bold text-yellow-400 text-lg mb-2">Советник Баланса</h4>
-                        <p class="text-sm text-gray-400 mb-4">Введите желаемую чистую прибыль казино с 1000 открытий, и алгоритм подберет шансы для всех предметов.</p>
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="font-bold text-yellow-400 text-lg">Советник Smart Curve 🧠</h4>
+                        </div>
+                        <p class="text-sm text-gray-400 mb-4">Введите желаемую чистую прибыль с 1000 открытий. Алгоритм идеально подберет шансы: дешевые предметы будут падать часто, а дорогие — очень редко.</p>
                         
                         <div class="flex items-center gap-3 mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
                             <label class="text-sm font-bold text-gray-400 whitespace-nowrap">Цель (ЭМ):</label>
@@ -721,6 +702,7 @@
             `;
         }
 
+        // НОВЫЙ АЛГОРИТМ: Bisection Method (Метод половинного деления) для идеальной цены
         window.adviseChancesUI = function(idx) {
             const casePrice = Number(document.getElementById('ed-case-price').value);
             const targetTotalProfit = Number(document.getElementById('ed-target-profit').value); 
@@ -731,8 +713,8 @@
             while(document.getElementById(`ed-name-${i}`)) {
                 items.push({
                     name: document.getElementById(`ed-name-${i}`).value,
-                    price: Number(document.getElementById(`ed-price-${i}`).value),
-                    chance: Number(document.getElementById(`ed-chance-${i}`).value) || 1 
+                    price: Math.max(0.01, Number(document.getElementById(`ed-price-${i}`).value)), // Защита от деления на 0
+                    chanceInputId: `ed-chance-${i}`
                 });
                 i++;
             }
@@ -743,45 +725,60 @@
             let minPrice = Math.min(...items.map(it => it.price));
             let maxPrice = Math.max(...items.map(it => it.price));
 
-            if (targetEV < minPrice) { advDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-3 rounded-lg text-sm border border-red-800/50"><b>Ошибка!</b> Самый дешевый лут стоит ${minPrice} ЭМ. Прибыль ${targetTotalProfit} ЭМ математически недостижима. Снизьте аппетиты или добавьте дешевый мусор.</div>`; return; }
-            if (targetEV > maxPrice) { advDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-3 rounded-lg text-sm border border-red-800/50"><b>Ошибка!</b> Самый дорогой лут стоит ${maxPrice} ЭМ. Математически недостижимо.</div>`; return; }
+            if (targetEV <= minPrice) { advDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-3 rounded-lg text-sm border border-red-800/50"><b>Невозможно!</b> Самый дешевый предмет стоит ${minPrice} ЭМ. Прибыль ${targetTotalProfit} ЭМ математически недостижима. Снизьте аппетиты или добавьте дешевый мусор.</div>`; return; }
+            if (targetEV >= maxPrice) { advDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-3 rounded-lg text-sm border border-red-800/50"><b>Невозможно!</b> Самый дорогой предмет стоит ${maxPrice} ЭМ. Игрок гарантированно не сможет окупить кейс.</div>`; return; }
 
-            let goodItems = items.filter(it => it.price >= targetEV);
-            let badItems = items.filter(it => it.price < targetEV);
+            // Функция подсчета EV при заданном коэффициенте K
+            function getEV(k) {
+                let sumW = 0;
+                let sumWP = 0;
+                for (let it of items) {
+                    let w = Math.pow(it.price, -k);
+                    sumW += w;
+                    sumWP += w * it.price;
+                }
+                return sumWP / sumW;
+            }
 
-            if(goodItems.length === 0 || badItems.length === 0) { advDiv.innerHTML = `<div class="text-yellow-400 text-sm mt-3">Все цены равны, балансировка невозможна.</div>`; return; }
+            // Метод бисекции для поиска идеального K
+            let k_min = -20;
+            let k_max = 20;
+            let best_k = 0;
 
-            let sumGoodChance = goodItems.reduce((s, it) => s + it.chance, 0) || 1;
-            let sumBadChance = badItems.reduce((s, it) => s + it.chance, 0) || 1;
-            let evGood = goodItems.reduce((s, it) => s + (it.price * it.chance), 0) / sumGoodChance;
-            let evBad = badItems.reduce((s, it) => s + (it.price * it.chance), 0) / sumBadChance;
+            for (let step = 0; step < 60; step++) {
+                best_k = (k_min + k_max) / 2;
+                let current_ev = getEV(best_k);
+                if (current_ev > targetEV) {
+                    k_min = best_k; // Нужно сместить веса к дешевым предметам -> увеличиваем K
+                } else {
+                    k_max = best_k;
+                }
+            }
 
-            if (Math.abs(evGood - evBad) < 0.01) { advDiv.innerHTML = `<div class="text-yellow-400 text-sm mt-3">Разница в ценах слишком мала.</div>`; return; }
+            // Финализируем шансы
+            let sumW = 0;
+            items.forEach(it => {
+                it.weight = Math.pow(it.price, -best_k);
+                sumW += it.weight;
+            });
 
-            let wGood = 100 * (targetEV - evBad) / (evGood - evBad);
-            let wBad = 100 - wGood;
             let newChancesArray = [];
             let htmlList = `<ul class="text-sm space-y-1 mt-3 mb-4 max-h-48 overflow-y-auto custom-scrollbar pr-2">`;
 
             items.forEach((item, index) => {
-                let newC = (item.price >= targetEV) ? ((item.chance / sumGoodChance) * wGood) : ((item.chance / sumBadChance) * wBad);
-                newC = Math.max(0.001, newC); 
+                let newC = (item.weight / sumW) * 100;
                 newChancesArray.push(newC.toFixed(3));
-                
-                let diff = newC - item.chance;
-                let arrow = diff > 0 ? `<span class="text-green-500 text-xs pl-2">▲</span>` : `<span class="text-red-500 text-xs pl-2">▼</span>`;
-                if(Math.abs(diff) < 0.01) arrow = `<span class="text-gray-500 text-xs pl-2">=</span>`;
 
                 htmlList += `<li class="flex justify-between border-b border-gray-700/50 pb-1">
-                    <span class="text-gray-400 truncate pr-2">${item.name}</span>
-                    <span class="font-mono text-yellow-400 whitespace-nowrap">${newC.toFixed(3)}% ${arrow}</span>
+                    <span class="text-gray-400 truncate pr-2">${item.name} <span class="text-xs text-gray-500">(${item.price} ЭМ)</span></span>
+                    <span class="font-mono text-yellow-400 whitespace-nowrap">${newC.toFixed(3)}%</span>
                 </li>`;
             });
             htmlList += `</ul>`;
 
             advDiv.innerHTML = `
                 <div class="mt-4 p-4 bg-gray-900 rounded-lg border border-yellow-600/50 shadow-inner">
-                    <div class="text-xs text-yellow-500 mb-1 uppercase tracking-wider font-bold">Оптимальные шансы:</div>
+                    <div class="text-xs text-yellow-500 mb-1 uppercase tracking-wider font-bold">Оптимальные шансы (Smart Curve):</div>
                     ${htmlList}
                     <button onclick="applyAdviceEdits([${newChancesArray}])" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 rounded transition shadow">
                         Применить шансы
