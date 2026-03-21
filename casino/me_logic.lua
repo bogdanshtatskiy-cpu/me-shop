@@ -107,19 +107,39 @@ end
 
 -- Выдача призов
 function me.givePrize(item_id, item_damage, qty)
-    -- ИСПРАВЛЕНО ТУТ: Теперь мы передаем все возможные варианты названия для надежности
-    local perfect_fingerprint = {
-        id = item_id,
-        name = item_id,
-        damage = math.floor(item_damage or 0),
-        dmg = math.floor(item_damage or 0)
-    }
-    
+    local item_damage_num = math.floor(item_damage or 0)
     local total_moved = 0
-    local last_err = "Сундук выдачи не найден ни над одним интерфейсом!"
+    local last_err = "Сундук выдачи не найден или предмета нет в МЭ!"
 
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
+        
+        -- УМНЫЙ ПОИСК NBT-ТЕГОВ
+        -- Запрашиваем у МЭ сети точный слепок предмета
+        local perfect_fingerprint = nil
+        local ok_search, items = pcall(me_proxy.getItemsInNetwork, { name = item_id, damage = item_damage_num })
+        
+        if ok_search and type(items) == "table" then
+            for _, item in pairs(items) do
+                if type(item) == "table" and (item.name == item_id or item.id == item_id) then
+                    -- Мы нашли предмет в сети! Берем его точный слепок (включая NBT)
+                    perfect_fingerprint = item
+                    break
+                end
+            end
+        end
+        
+        -- Если вдруг предмета нет в МЭ сети прямо сейчас, используем стандартный слепок
+        if not perfect_fingerprint then
+            perfect_fingerprint = {
+                id = item_id,
+                name = item_id,
+                damage = item_damage_num,
+                dmg = item_damage_num
+            }
+        end
+
+        -- Пытаемся выдать предмет
         for side = 0, 5 do
             local ok, result = pcall(me_proxy.exportItem, perfect_fingerprint, side, qty)
             local moved_now = 0
