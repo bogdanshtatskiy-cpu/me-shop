@@ -102,6 +102,36 @@ function gui.drawCases(pageItems, page, maxPage)
     if page < maxPage then gui.btn("page_next", rightColX - 16, py, 14, 3, "ВПЕРЕД ->", gui.COLORS.btnActive) end
 end
 
+function gui.drawCaseView(case)
+    gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
+    local w = W - 4; local h = H - 6
+    local x = 3; local y = 4
+
+    rect(x, y, w, h, gui.COLORS.panel)
+    rect(x, y, w, 2, gui.COLORS.energy)
+    center(x, y, w, "ПРОСМОТР КЕЙСА: " .. case.name, gui.COLORS.text, gui.COLORS.energy)
+
+    local currentY = y + 3
+    if case.items and #case.items > 0 then
+        for i, item in ipairs(case.items) do
+            if currentY > y + h - 4 then break end
+            local chanceColor = gui.COLORS.text
+            if item.chance < 5 then chanceColor = config.rarity_colors.super_rare
+            elseif item.chance < 20 then chanceColor = config.rarity_colors.rare
+            elseif item.chance < 60 then chanceColor = config.rarity_colors.uncommon
+            end
+            
+            text(x + 2, currentY, item.name, gui.COLORS.text, gui.COLORS.panel)
+            text(x + 45, currentY, "Шанс: " .. item.chance .. "%", chanceColor, gui.COLORS.panel)
+            currentY = currentY + 1
+        end
+    else
+        center(x, y + 5, w, "В этом кейсе пока нет предметов", gui.COLORS.label, gui.COLORS.panel)
+    end
+    
+    gui.btn("close_view", x + math.floor(w/2) - 10, y + h - 3, 20, 1, "НАЗАД", gui.COLORS.btnActive)
+end
+
 function gui.drawTick(user, timer)
     if user and timer then center(rightColX, 9, rightColW, "Выход через: " .. timer .. "с   ", gui.COLORS.label, gui.COLORS.panel) end
 end
@@ -140,6 +170,9 @@ function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
     gui.btn("adm_cases", 2, 5, 14, 3, "КЕЙСЫ", substate == "cases" and gui.COLORS.btnActive or gui.COLORS.btn)
     gui.btn("adm_name", 17, 5, 18, 3, "ИМЯ КАЗИНО", gui.COLORS.btn)
     gui.btn("adm_logs", 36, 5, 14, 3, "ЛОГИ", substate == "logs" and gui.COLORS.btnActive or gui.COLORS.btn)
+    -- ДОБАВЛЕНА НОВАЯ ВКЛАДКА "СКУПКА"
+    gui.btn("adm_deposit", 51, 5, 14, 3, "СКУПКА", substate == "deposit" and gui.COLORS.btnActive or gui.COLORS.btn)
+    
     gui.btn("close_admin", W - 16, 5, 14, 3, "ВЫЙТИ", gui.COLORS.bad)
 
     rect(2, 9, W - 4, H - 14, gui.COLORS.panel)
@@ -156,6 +189,10 @@ function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
                 local str = tostring(el)
                 text(4, y, unicode.sub(str, 1, W - 8), gui.COLORS.text, gui.COLORS.panel)
                 y = y + 1
+            elseif substate == "deposit" then
+                text(4, y, el.name .. " (" .. el.price .. " " .. CUR .. ")", gui.COLORS.text, gui.COLORS.panel)
+                gui.btn("adm_del_dep_"..id, W - 14, y, 12, 1, "УДАЛИТЬ", gui.COLORS.bad)
+                y = y + 2
             else
                 local name = type(el) == "table" and el.name or el
                 local extra = type(el) == "table" and (" (" .. el.price .. " " .. CUR .. ")") or ""
@@ -175,6 +212,8 @@ function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
         if logFilter ~= nil and logFilter ~= "" then
             gui.btn("clear_filter", 28, py, 14, 3, "СБРОС", gui.COLORS.bad)
         end
+    elseif substate == "deposit" then
+        gui.btn("adm_add_dep", 2, py, 24, 3, "ДОБАВИТЬ ПРЕДМЕТ", gui.COLORS.good)
     else
         gui.btn("adm_add", 2, py, 24, 3, "ДОБАВИТЬ КЕЙС", gui.COLORS.good)
     end
@@ -189,7 +228,6 @@ end
 
 function gui.drawEditorModal(data)
     gui.buttons = {}
-    -- ИСПРАВЛЕНО: Увеличена высота h с 12 до 14, чтобы элементы не слипались
     local w = 70; local h = 14
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     
@@ -255,9 +293,9 @@ function gui.drawCaseEditor(case, items)
     gui.btn("back_to_admin", x + w - 22, y + h - 3, 20, 1, "НАЗАД", gui.COLORS.btn)
 end
 
-function gui.drawItemEditor(data)
+function gui.drawItemEditor(data, isDeposit)
     gui.buttons = {}
-    local w = 70; local h = 18
+    local w = 70; local h = isDeposit and 14 or 18
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
@@ -266,17 +304,19 @@ function gui.drawItemEditor(data)
 
     text(x+4, y+3, "Системный ID: " .. data.orig_id .. ":" .. (data.damage or 0), gui.COLORS.label, gui.COLORS.tileBg)
 
-    text(x+4, y+5, "Отображаемое имя (можно изменить):", gui.COLORS.text, gui.COLORS.tileBg)
+    text(x+4, y+5, isDeposit and "Имя (отображается только здесь):" or "Отображаемое имя (можно изменить):", gui.COLORS.text, gui.COLORS.tileBg)
     local bgName = (data.focus == "name") and gui.COLORS.inputFocus or gui.COLORS.inputBg
     gui.btn("focus_name", x+4, y+6, w-8, 1, data.name .. ((data.focus == "name") and "_" or ""), bgName, gui.COLORS.text)
     
-    text(x+4, y+8, "Цена (для симулятора и аналитики):", gui.COLORS.text, gui.COLORS.tileBg)
+    text(x+4, y+8, isDeposit and "Цена скупки за 1 штуку:" : "Цена (для симулятора и аналитики):", gui.COLORS.text, gui.COLORS.tileBg)
     local bgPrice = (data.focus == "price") and gui.COLORS.inputFocus or gui.COLORS.inputBg
     gui.btn("focus_price", x+4, y+9, w-8, 1, data.price .. ((data.focus == "price") and "_" or ""), bgPrice, gui.COLORS.warn)
 
-    text(x+4, y+11, "Шанс выпадения, % (число, можно дробное):", gui.COLORS.text, gui.COLORS.tileBg)
-    local bgChance = (data.focus == "chance") and gui.COLORS.inputFocus or gui.COLORS.inputBg
-    gui.btn("focus_chance", x+4, y+12, w-8, 1, data.chance .. ((data.focus == "chance") and "_" or ""), bgChance, gui.COLORS.good)
+    if not isDeposit then
+        text(x+4, y+11, "Шанс выпадения, % (число, можно дробное):", gui.COLORS.text, gui.COLORS.tileBg)
+        local bgChance = (data.focus == "chance") and gui.COLORS.inputFocus or gui.COLORS.inputBg
+        gui.btn("focus_chance", x+4, y+12, w-8, 1, data.chance .. ((data.focus == "chance") and "_" or ""), bgChance, gui.COLORS.good)
+    end
 
     gui.btn("item_ed_save", x + 4, y + h - 4, math.floor(w/2) - 6, 3, "СОХРАНИТЬ", gui.COLORS.good)
     gui.btn("item_ed_cancel", x + math.floor(w/2) + 2, y + h - 4, math.floor(w/2) - 6, 3, "ОТМЕНА", gui.COLORS.bad)
