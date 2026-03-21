@@ -12,18 +12,21 @@ local me = require("casino_me_logic")
 local network = require("casino_network")
 local json = require("casino_json")
 
--- === DISABLE CTRL+ALT+C TERMINATION ===
+-- === ОТКЛЮЧАЕМ БЕЗУСЛОВНОЕ ЗАКРЫТИЕ НА CTRL+ALT+C ===
 event.shouldInterrupt = function() return false end
 
-local me_ok, me_msg = me.init()
-local CUR = config.currency_name or "EM"
+-- === ИНИЦИАЛИЗАЦИЯ ИСТИННОГО РАНДОМА ===
+math.randomseed(os.time() + (os.clock() * 1000))
 
-local OWNER_NAME = "Admin"
+local me_ok, me_msg = me.init()
+local CUR = config.currency_name or "ЭМ"
+
+local OWNER_NAME = "Администратор"
 if config.admins then for k, v in pairs(config.admins) do OWNER_NAME = k; break end end
 
 local casino_cases = {}
 local users_db = {} 
-local casino_name = "CASINO"
+local casino_name = "КАЗИНО"
 
 local currentUser = nil
 local idleTimer = 0
@@ -37,7 +40,7 @@ local selectedItemIndex = nil
 local roulette_strip = {}
 local roulette_winner = nil
 local roulette_start_time = 0
-local roulette_duration = 7 -- seconds
+local roulette_duration = 7 -- секунды
 local roulette_target_pos = 0
 local roulette_start_pos = 0
 
@@ -46,7 +49,7 @@ local ITEMS_PER_PAGE = 6
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
--- === CUSTOM CALENDAR ===
+-- === КАСТОМНЫЙ КАЛЕНДАРЬ ===
 local function formatUnixTime(unix)
     local z = math.floor(unix / 86400) + 719468
     local era = math.floor((z >= 0 and z or (z - 146096)) / 146097)
@@ -66,7 +69,7 @@ local function formatUnixTime(unix)
     return string.format("%04d-%02d-%02d %02d:%02d:%02d", y, m, d, h, min, s)
 end
 
--- === REAL TIME FILE TRICK ===
+-- === ТРЮК С ФАЙЛОМ ДЛЯ РЕАЛЬНОГО ВРЕМЕНИ ===
 local function getRealTime()
     local tz = tonumber(config.timezone) or 0
     local tmp_file = "/home/HostTime.tmp"
@@ -85,7 +88,7 @@ local function getRealTime()
         end
     end
     
-    return os.date("%Y-%m-%d %H:%M:%S") .. " (Game)"
+    return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
 end
 
 local function writeLog(action, user, details)
@@ -136,7 +139,7 @@ local function loadLogsLocal(filter)
     local count = #logs
     local start = math.max(1, count - 150)
     for i = count, start, -1 do table.insert(res, logs[i]) end
-    if #res == 0 then table.insert(res, "No logs found or filter mismatch...") end
+    if #res == 0 then table.insert(res, "Логи не найдены или не соответствуют фильтру...") end
     return res
 end
 
@@ -252,7 +255,7 @@ local function refreshScreen()
         gui.drawStatic(currentUser, currentUser and idleTimer or nil, getTop3Players(), casino_name)
         local pItems, maxPage = getPageItems(casino_cases, ITEMS_PER_PAGE)
         gui.drawCases(pItems, currentPage, maxPage)
-        if not me_ok then component.gpu.set(2, component.gpu.getResolution(), "SYSTEM ERROR: " .. me_msg) end
+        if not me_ok then component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg) end
     elseif state == "admin_edit_case" then
         local case = casino_cases[selectedCaseIndex]
         gui.drawCaseEditor(case, case.items or {})
@@ -280,7 +283,7 @@ local function showMsg(title, text, isError, timeout)
     gui.drawNotification(title, text, isError)
 end
 
--- Initialization
+-- Инициализация
 loadDB()
 refreshScreen()
 
@@ -294,12 +297,12 @@ while true do
                 ed_data.return_to = "casino"
                 local ok, msg, num_given = me.givePrize(roulette_winner.id, roulette_winner.damage, 1)
                 if ok and num_given > 0 then
-                    writeLog("WIN", currentUser.name, "Won " .. roulette_winner.name .. " from case " .. ed_data.case_name)
-                    showMsg("YOU WON!", "You received: " .. roulette_winner.name, false, 5)
+                    writeLog("ВЫИГРЫШ", currentUser.name, "Выиграл " .. roulette_winner.name .. " из кейса " .. ed_data.case_name)
+                    showMsg("ВЫИГРЫШ!", "Вы получили: " .. roulette_winner.name, false, 5)
                 else
                     currentUser.balance = currentUser.balance + ed_data.case_price
-                    writeLog("PRIZE ERROR", currentUser.name, "Failed to give " .. roulette_winner.name .. ". " .. msg)
-                    showMsg("PRIZE ERROR", "Failed to give prize. Funds returned. " .. msg, true, 5)
+                    writeLog("ОШИБКА ВЫДАЧИ", currentUser.name, "Не удалось выдать " .. roulette_winner.name .. ". " .. msg)
+                    showMsg("ОШИБКА ВЫДАЧИ", "Не удалось выдать приз. Средства возвращены. " .. msg, true, 5)
                 end
                 saveUser()
                 roulette_strip = {}
@@ -351,10 +354,10 @@ while true do
                 component.gpu.setBackground(0x000000)
                 component.gpu.setForeground(0xFFFFFF)
                 require("term").clear()
-                print("Program terminated by admin: " .. currentUser.name)
+                print("Программа завершена администратором: " .. currentUser.name)
                 os.exit()
             else
-                showMsg("ACCESS DENIED", "Only an admin can terminate the program!", true, 3)
+                showMsg("ОТКАЗ В ДОСТУПЕ", "Только администратор может закрыть программу!", true, 3)
             end
         elseif ev == "key_down" and (state == "editor" or state == "admin_edit_item") then
             local char = arg1; local code = arg2
@@ -410,7 +413,7 @@ while true do
                             local stack, msg = me.peekInput()
                             if not stack then
                                 ed_data.return_to = "admin_edit_case"
-                                showMsg("SCANNER ERROR", msg, true, 4)
+                                showMsg("ОШИБКА СКАНЕРА", msg, true, 4)
                             else
                                 state = "admin_edit_item"
                                 ed_data.is_new = true
@@ -447,14 +450,14 @@ while true do
                              state = "admin_cases"; refreshScreen()
                         elseif action == "ed_save" then
                             local p_str = tostring(ed_data.price):gsub(",", ".")
-                            if ed_data.target ~= "log_filter" and (p_str == "" or not tonumber(p_str)) then showMsg("ERROR", "Price must be a number!", true); return end
+                            if ed_data.target ~= "log_filter" and (p_str == "" or not tonumber(p_str)) then showMsg("ОШИБКА", "Цена должна быть числом!", true); return end
                             if ed_data.target == "log_filter" then
                                 log_filter = ed_data.name; state = "admin_logs"; adminPage = 1; refreshScreen()
                             elseif ed_data.target == "casino_name" then
                                 casino_name = ed_data.name; saveCasino(); state = "admin_cases"; refreshScreen()
                             elseif ed_data.target == "add_case" then
                                 table.insert(casino_cases, { name = ed_data.name, price = tonumber(p_str), items = {} })
-                                writeLog("CASE ADDED", currentUser.name, ed_data.name .. " for " .. p_str .. " " .. CUR)
+                                writeLog("КЕЙС ДОБАВЛЕН", currentUser.name, ed_data.name .. " за " .. p_str .. " " .. CUR)
                                 saveCasino(); state = "admin_cases"; adminPage = 1; refreshScreen()
                             end
                         end
@@ -462,7 +465,7 @@ while true do
                         if action == "back_to_admin" then state = "admin_cases"; selectedCaseIndex = nil; refreshScreen() 
                         elseif action == "case_add_item" then
                             state = "admin_wait_scan"
-                            gui.drawNotification("SCANNING", "Place one item in the chest and press OK", false)
+                            gui.drawNotification("СКАНИРОВАНИЕ", "Положите 1 предмет в сундук и нажмите ОК", false)
                         elseif action:match("case_edit_item_") then
                             selectedItemIndex = tonumber(action:match("%d+"))
                             local item = casino_cases[selectedCaseIndex].items[selectedItemIndex]
@@ -490,7 +493,7 @@ while true do
                             local chance = tonumber(tostring(ed_data.chance):gsub(",", "."))
                             if not price or not chance then
                                 ed_data.return_to = "admin_edit_item"
-                                showMsg("ERROR", "Price and chance must be numbers!", true, 4)
+                                showMsg("ОШИБКА", "Цена и шанс должны быть числами!", true, 4)
                             else
                                 local item_data = {
                                     name = ed_data.name, price = price, chance = chance,
@@ -529,21 +532,21 @@ while true do
                         elseif action == "logout" then currentUser = nil; currentPage = 1; refreshScreen()
                         elseif action == "admin_panel" then state = "admin_cases"; adminPage = 1; refreshScreen()
                         elseif action == "deposit" then
-                            if not currentUser then showMsg("ERROR", "Please log in first!", true)
+                            if not currentUser then showMsg("ОШИБКА", "Сначала авторизуйтесь!", true)
                             else
                                 local success, msg, earned = me.sellAllToBalance()
                                 if success and earned > 0 then 
                                     currentUser.balance = currentUser.balance + earned; saveUser()
-                                    writeLog("DEPOSIT", currentUser.name, msg .. " Credited: " .. earned .. " " .. CUR)
-                                    showMsg("SUCCESS", msg .. " Credited: " .. earned .. " " .. CUR, false, 3)
-                                else showMsg("ERROR", msg, true) end
+                                    writeLog("ПОПОЛНЕНИЕ", currentUser.name, msg .. " Зачислено: " .. earned .. " " .. CUR)
+                                    showMsg("УСПЕШНО", msg .. " Зачислено: " .. earned .. " " .. CUR, false, 3)
+                                else showMsg("ОШИБКА", msg, true) end
                             end
                         elseif action:match("open_case_") then
                             local case_idx = tonumber(action:match("%d+"))
                             local case = casino_cases[case_idx]
-                            if not currentUser then showMsg("ERROR", "Please log in first!", true, 3) return end
-                            if not case.items or #case.items == 0 then showMsg("ERROR", "This case is empty!", true, 3) return end
-                            if currentUser.balance < case.price then showMsg("ERROR", "Not enough funds!", true, 3) return end
+                            if not currentUser then showMsg("ОШИБКА", "Сначала авторизуйтесь!", true, 3) return end
+                            if not case.items or #case.items == 0 then showMsg("ОШИБКА", "Этот кейс пуст!", true, 3) return end
+                            if currentUser.balance < case.price then showMsg("ОШИБКА", "Недостаточно средств!", true, 3) return end
                             currentUser.balance = currentUser.balance - case.price
                             currentUser.spent = (currentUser.spent or 0) + case.price
                             local total_chance = 0
@@ -570,7 +573,7 @@ while true do
                             roulette_start_pos = math.random(5, 15)
                             roulette_start_time = os.clock()
                         elseif action:match("view_case_") then
-                            -- TODO: View case contents
+                            -- TODO: Осмотр кейса
                         end
                     elseif string.match(state, "admin") then
                         if action == "adm_cases" then state = "admin_cases"; adminPage = 1; refreshScreen()
@@ -578,13 +581,13 @@ while true do
                         elseif action == "adm_name" then ed_data = {target = "casino_name", focus = "name", name = casino_name}; state = "editor"; refreshScreen()
                         elseif action == "adm_add" then
                             if state == "admin_cases" then
-                                ed_data = {target = "add_case", focus = "name", name = "New Case", price = "100"}
+                                ed_data = {target = "add_case", focus = "name", name = "Новый кейс", price = "100"}
                                 state = "editor"; refreshScreen()
                             end
                         elseif action:match("adm_del_") then
                             local idx = tonumber(action:match("%d+"))
                             if state == "admin_cases" then 
-                                writeLog("CASE DELETED", currentUser.name, casino_cases[idx].name); 
+                                writeLog("КЕЙС УДАЛЕН", currentUser.name, casino_cases[idx].name); 
                                 table.remove(casino_cases, idx) 
                             end
                             saveCasino(); refreshScreen()
