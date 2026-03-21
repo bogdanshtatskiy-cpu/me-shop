@@ -101,9 +101,6 @@ function me.peekInput()
     return nil, "Положите предмет в сундук!"
 end
 
--- =========================================================
--- ХОД КОНЕМ: ВЫДАЧА ЧЕРЕЗ БД И ТРАНСПОУЗЕР
--- =========================================================
 function me.givePrize(item_id, item_damage, qty)
     if not item_id or item_id == "" then
         return false, "У предмета не указан Системный ID!", 0
@@ -125,31 +122,28 @@ function me.givePrize(item_id, item_damage, qty)
         end
     end
 
-    -- 1. ИДЕАЛЬНОЕ РЕШЕНИЕ: БАЗА ДАННЫХ + ТРАНСПОУЗЕР (Обход бага NBT)
+    -- 1. БАЗА ДАННЫХ + ТРАНСПОУЗЕР (Обход бага NBT)
     local db = component.isAvailable("database") and component.database or nil
     local target_db_slot = nil
     
     if db then
-        -- У БД нет метода getSize. Максимальный размер (Tier 3) = 81 слот.
-        -- Перебираем безопасно (pcall) до 81. Если слот недоступен, скрипт просто пойдет дальше.
         for i = 1, 81 do
             local ok, db_item = pcall(db.get, i)
-            if ok and db_item and (string.lower(db_item.name) == string.lower(item_id) or string.lower(db_item.id or "") == string.lower(item_id)) then
-                target_db_slot = i
-                break
+            if ok and db_item then
+                local db_name = db_item.name or db_item.id or ""
+                if string.lower(db_name) == string.lower(item_id) then
+                    target_db_slot = i
+                    break
+                end
             end
         end
     end
 
-    -- Если предмет лежит в Базе Данных и Сундук выдачи найден Транспоузером
     if target_db_slot and prize_chest_side and me.t then
         for addr in component.list("me_interface") do
             local me_proxy = component.proxy(addr)
             
-            -- Настраиваем 1-й слот конфигурации МЭ интерфейса на выдачу из БД
             pcall(me_proxy.setInterfaceConfiguration, 1, db.address, target_db_slot, qty)
-            
-            -- Даем МЭ сети полсекунды перекинуть предмет во внутренний буфер
             os.sleep(0.5)
             
             local moved = 0
@@ -157,16 +151,18 @@ function me.givePrize(item_id, item_damage, qty)
             if ok_size and int_size then
                 for slot = 1, int_size do
                     local stack = me.t.getStackInSlot(me.config.me_side, slot)
-                    if stack and (string.lower(stack.name) == string.lower(item_id) or string.lower(stack.id or "") == string.lower(item_id)) then
-                        local m = me.t.transferItem(me.config.me_side, prize_chest_side, qty - moved, slot)
-                        if type(m) == "number" then moved = moved + m
-                        elseif type(m) == "boolean" and m then moved = moved + stack.size end
-                        if moved >= qty then break end
+                    if stack then
+                        local st_name = stack.name or stack.id or ""
+                        if string.lower(st_name) == string.lower(item_id) then
+                            local m = me.t.transferItem(me.config.me_side, prize_chest_side, qty - moved, slot)
+                            if type(m) == "number" then moved = moved + m
+                            elseif type(m) == "boolean" and m then moved = moved + stack.size end
+                            if moved >= qty then break end
+                        end
                     end
                 end
             end
             
-            -- Очищаем конфигурацию, чтобы предметы больше не сосало
             pcall(me_proxy.setInterfaceConfiguration, 1)
             
             if moved > 0 then
@@ -175,17 +171,17 @@ function me.givePrize(item_id, item_damage, qty)
         end
     end
 
-    -- 2. РЕЗЕРВНЫЙ МЕТОД (exportItem) ДЛЯ ОБЫЧНЫХ ВЕЩЕЙ (Панели, блоки и т.д.)
+    -- 2. РЕЗЕРВНЫЙ МЕТОД (exportItem)
     local total_moved = 0
     local last_err = "Предмета нет в МЭ или Сундук выдачи не найден."
     local no_chest_found = true
     local directions = {"DOWN", "UP", "NORTH", "SOUTH", "WEST", "EAST"}
     
+    -- ИСПРАВЛЕНО: Во всех таблицах теперь жестко есть поле id
     local fingerprints_to_try = {
-        { id = item_id, damage = item_damage_num },
-        { name = item_id, damage = item_damage_num },
-        { id = item_id, damage = 32767 },
-        { id = item_id }
+        { id = item_id, name = item_id, damage = item_damage_num },
+        { id = item_id, name = item_id, damage = 32767 },
+        { id = item_id, name = item_id }
     }
 
     for addr in component.list("me_interface") do
