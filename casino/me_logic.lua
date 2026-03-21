@@ -114,22 +114,25 @@ function me.givePrize(item_id, item_damage, qty)
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
         
-        -- УМНЫЙ ПОИСК NBT-ТЕГОВ
-        -- Запрашиваем у МЭ сети точный слепок предмета
         local perfect_fingerprint = nil
-        local ok_search, items = pcall(me_proxy.getItemsInNetwork, { name = item_id, damage = item_damage_num })
+        
+        -- Пробуем найти предмет в МЭ сети, чтобы получить его точные NBT-теги
+        local ok_search, items = pcall(me_proxy.getItemsInNetwork, { name = item_id })
+        
+        -- В некоторых версиях AE2 фильтр называется 'id', перестраховываемся
+        if not ok_search or not items or #items == 0 then
+            ok_search, items = pcall(me_proxy.getItemsInNetwork, { id = item_id })
+        end
         
         if ok_search and type(items) == "table" then
             for _, item in pairs(items) do
-                if type(item) == "table" and (item.name == item_id or item.id == item_id) then
-                    -- Мы нашли предмет в сети! Берем его точный слепок (включая NBT)
+                if type(item) == "table" and (item.name == item_id or item.id == item_id) and (math.floor(item.damage or 0) == item_damage_num) then
                     perfect_fingerprint = item
                     break
                 end
             end
         end
         
-        -- Если вдруг предмета нет в МЭ сети прямо сейчас, используем стандартный слепок
         if not perfect_fingerprint then
             perfect_fingerprint = {
                 id = item_id,
@@ -137,9 +140,14 @@ function me.givePrize(item_id, item_damage, qty)
                 damage = item_damage_num,
                 dmg = item_damage_num
             }
+        else
+            -- ВАЖНЕЙШИЙ ФИКС ЗДЕСЬ:
+            -- МЭ сеть возвращает таблицу, в которой есть только 'name', но нет 'id'.
+            -- Добавляем 'id' принудительно, чтобы exportItem не ругался!
+            perfect_fingerprint.id = perfect_fingerprint.id or perfect_fingerprint.name or item_id
+            perfect_fingerprint.damage = perfect_fingerprint.damage or perfect_fingerprint.dmg or item_damage_num
         end
 
-        -- Пытаемся выдать предмет
         for side = 0, 5 do
             local ok, result = pcall(me_proxy.exportItem, perfect_fingerprint, side, qty)
             local moved_now = 0
