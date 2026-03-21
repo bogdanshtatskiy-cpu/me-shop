@@ -12,18 +12,18 @@ local me = require("casino_me_logic")
 local network = require("casino_network")
 local json = require("casino_json")
 
--- === ОТКЛЮЧАЕМ БЕЗУСЛОВНОЕ ЗАКРЫТИЕ НА CTRL+ALT+C ===
+-- === DISABLE CTRL+ALT+C TERMINATION ===
 event.shouldInterrupt = function() return false end
 
 local me_ok, me_msg = me.init()
-local CUR = config.currency_name or "ЭМ"
+local CUR = config.currency_name or "EM"
 
-local OWNER_NAME = "Администратор"
+local OWNER_NAME = "Admin"
 if config.admins then for k, v in pairs(config.admins) do OWNER_NAME = k; break end end
 
 local casino_cases = {}
 local users_db = {} 
-local casino_name = "КАЗИНО"
+local casino_name = "CASINO"
 
 local currentUser = nil
 local idleTimer = 0
@@ -46,7 +46,7 @@ local ITEMS_PER_PAGE = 6
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
--- === КАСТОМНЫЙ КАЛЕНДАРЬ ===
+-- === CUSTOM CALENDAR ===
 local function formatUnixTime(unix)
     local z = math.floor(unix / 86400) + 719468
     local era = math.floor((z >= 0 and z or (z - 146096)) / 146097)
@@ -66,7 +66,7 @@ local function formatUnixTime(unix)
     return string.format("%04d-%02d-%02d %02d:%02d:%02d", y, m, d, h, min, s)
 end
 
--- === ТРЮК С ФАЙЛОМ ДЛЯ РЕАЛЬНОГО ВРЕМЕНИ ===
+-- === REAL TIME FILE TRICK ===
 local function getRealTime()
     local tz = tonumber(config.timezone) or 0
     local tmp_file = "/home/HostTime.tmp"
@@ -85,7 +85,7 @@ local function getRealTime()
         end
     end
     
-    return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
+    return os.date("%Y-%m-%d %H:%M:%S") .. " (Game)"
 end
 
 local function writeLog(action, user, details)
@@ -319,7 +319,7 @@ while true do
                     shouldRefreshFull = true 
                 end
             end
-            if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and not string.match(state, "editor") and not string.match(state, "admin") then
+            if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and not string.match(state, "editor") and not string.match(state, "admin") and state ~= "roulette" then
                 idleTimer = idleTimer - 1
                 if idleTimer <= 0 then 
                     currentUser = nil; state = "casino"; currentPage = 1
