@@ -7,10 +7,10 @@ local fs = require("filesystem")
 local me = {}
 me.t = nil      
 
--- Default configuration. Can be overridden if needed.
+-- Конфигурация по умолчанию. Может быть переопределена, если нужно
 me.config = { chest_side = sides.up, me_side = sides.down }
 
--- Temporary database for deposit prices. Loaded from a file.
+-- Временная база данных для цен пополнения. Загружается из файла.
 local deposit_prices = {}
 local DEPOSIT_DB_PATH = "/home/casino_deposit_prices.json"
 
@@ -28,9 +28,9 @@ local function loadDepositPrices()
     end
 end
 
--- Public function to save prices (can be called from admin panel)
+-- Публичная функция для сохранения цен (может быть вызвана из админки)
 function me.saveDepositPrices(new_prices)
-    if type(new_prices) ~= "table" then return false, "Invalid data format" end
+    if type(new_prices) ~= "table" then return false, "Неверный формат данных" end
     deposit_prices = new_prices
     local f = io.open(DEPOSIT_DB_PATH, "w")
     if f then
@@ -38,7 +38,7 @@ function me.saveDepositPrices(new_prices)
         f:close()
         return true
     else
-        return false, "Failed to write prices file"
+        return false, "Не удалось записать файл цен"
     end
 end
 
@@ -48,18 +48,18 @@ end
 
 function me.init()
     if component.isAvailable("transposer") then me.t = component.transposer end
-    if not me.t then return false, "Transposer not found!" end
-    if not component.isAvailable("me_interface") then return false, "ME Interface not found!" end
+    if not me.t then return false, "Транспоузер не найден!" end
+    if not component.isAvailable("me_interface") then return false, "МЭ Интерфейс не найден!" end
     
-    loadDepositPrices() -- Load prices on init
+    loadDepositPrices() -- Загружаем цены при инициализации
     
-    return true, "ME components are ready."
+    return true, "МЭ компоненты готовы."
 end
 
 function me.sellAllToBalance()
-    if not me.t then return false, "Transposer not connected!", 0 end
+    if not me.t then return false, "Транспоузер не подключен!", 0 end
     local inv_size = me.t.getInventorySize(me.config.chest_side)
-    if not inv_size or inv_size == 0 then return false, "Deposit chest not found!", 0 end
+    if not inv_size or inv_size == 0 then return false, "Сундук для депозита не найден!", 0 end
 
     local total_earned = 0; local sold_stats = {}; local err_msg = nil
 
@@ -88,29 +88,29 @@ function me.sellAllToBalance()
     if total_earned > 0 then
         local receipt = ""
         for name, qty in pairs(sold_stats) do receipt = receipt .. name .. "(x" .. qty .. ") " end
-        return true, "Sold: " .. receipt, total_earned
-    else return false, "Nothing sold. Reason: " .. tostring(err_msg or "No matching items or prices not set"), 0 end
+        return true, "Продано: " .. receipt, total_earned
+    else return false, "Ничего не продано. Причина: " .. tostring(err_msg or "Нет подходящих предметов или цен"), 0 end
 end
 
 function me.peekInput()
-    if not me.t then return nil, "Transposer not connected!" end
+    if not me.t then return nil, "Транспоузер не подключен!" end
     local inv_size = me.t.getInventorySize(me.config.chest_side)
     for slot = 1, inv_size do
         local stack = me.t.getStackInSlot(me.config.chest_side, slot)
         if stack and stack.size > 0 then return stack end
     end
-    return nil, "Place an item in the chest!"
+    return nil, "Положите предмет в сундук!"
 end
 
--- Prize delivery
+-- Выдача призов
 function me.givePrize(item_id, item_damage, qty)
     local perfect_fingerprint = {
-        id = item_id,
-        dmg = math.floor(item_damage or 0)
+        name = item_id, -- ИСПРАВЛЕНО: Было id, МЭ ожидает name
+        damage = math.floor(item_damage or 0) -- ИСПРАВЛЕНО: Было dmg, МЭ ожидает damage
     }
     
     local total_moved = 0
-    local last_err = "Output chest not found above any ME Interface!"
+    local last_err = "Сундук выдачи не найден ни над одним МЭ интерфейсом!"
 
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
@@ -141,7 +141,7 @@ function me.givePrize(item_id, item_damage, qty)
                     attempts = attempts + 1
                 end
                 
-                return true, "Success", total_moved
+                return true, "Успешно", total_moved
             elseif not ok then
                 last_err = tostring(result)
             end
@@ -150,9 +150,9 @@ function me.givePrize(item_id, item_damage, qty)
     end
     
     if total_moved > 0 then 
-        return true, "Partial", total_moved
+        return true, "Частично", total_moved
     else 
-        return false, "Error: " .. last_err, 0 
+        return false, "Ошибка: " .. last_err, 0 
     end
 end
 
