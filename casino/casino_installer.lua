@@ -2,7 +2,7 @@
 local internet = require("internet")
 
 -- ССЫЛКА НА ТВОЙ РЕПОЗИТОРИЙ НА GITHUB (ИЗМЕНИТЬ НА ПРАВИЛЬНЫЙ)
-local repo = "https://raw.githubusercontent.com/bogdanshtatskiy-cpu/me-shop/main/lua/" -- ЗАГЛУШКА, НУЖНО ИЗМЕНИТЬ
+local repo = "https://raw.githubusercontent.com/bogdanshtatskiy-cpu/me-shop/main/casino/" -- ЗАГЛУШКА, НУЖНО ИЗМЕНИТЬ
 
 local files = {
     "casino_config.lua",
