@@ -622,7 +622,8 @@ while true do
                                 for i=1, 50 do
                                     table.insert(roulette_strip, case.items[math.random(#case.items)])
                                 end
-                                roulette_target_pos = 40 + math.random()
+                                -- ИСПРАВЛЕНО ТУТ: Четко фиксируем рулетку по центру 41-го слота
+                                roulette_target_pos = 41 + (math.random() * 0.5 - 0.25)
                                 roulette_strip[41] = roulette_winner
                                 ed_data.case_name = case.name
                                 ed_data.case_price = case.price
