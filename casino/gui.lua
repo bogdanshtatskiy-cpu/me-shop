@@ -137,7 +137,6 @@ function gui.drawCases(pageItems, page, maxPage)
     if page < maxPage then gui.btn("page_next", rightColX - 16, py, 14, 3, "ВПЕРЕД ->", gui.COLORS.btnActive) end
 end
 
--- НОВЫЙ КРАСИВЫЙ ПРОСМОТР КЕЙСА
 function gui.drawCaseView(case)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     local w = W - 4; local h = H - 6
@@ -161,18 +160,20 @@ function gui.drawCaseView(case)
 
         for i, item in ipairs(case.items) do
             local chanceColor = gui.COLORS.text
-            local displayName = item.name
+            local qtyStr = (item.qty and item.qty > 1) and (" (x" .. item.qty .. ")") or ""
+            local baseName = item.name .. qtyStr
+            local displayName = baseName
             
-            -- Стилизация редкости без изменения шрифта
+            -- Используем безопасные символы '*' вместо юникодных '★'
             if item.chance < 5 then 
                 chanceColor = config.rarity_colors.super_rare
-                displayName = "[ ★★★ " .. unicode.upper(item.name) .. " ★★★ ]"
+                displayName = "[ *** " .. unicode.upper(baseName) .. " *** ]"
             elseif item.chance < 20 then 
                 chanceColor = config.rarity_colors.rare
-                displayName = "-= ★ " .. unicode.upper(item.name) .. " ★ =-"
+                displayName = "-= * " .. unicode.upper(baseName) .. " * =-"
             elseif item.chance < 60 then 
                 chanceColor = config.rarity_colors.uncommon
-                displayName = "~ " .. item.name .. " ~"
+                displayName = "~ " .. baseName .. " ~"
             else 
                 chanceColor = config.rarity_colors.common
             end
@@ -300,9 +301,9 @@ function gui.drawAdmin(substate, pageItems, page, maxPage, logFilter)
     
     local py = H - 4
     if substate == "logs" then
-        local filterText = (log_filter == nil or log_filter == "") and "ВСЕ" or unicode.sub(log_filter, 1, 12)
+        local filterText = (logFilter == nil or logFilter == "") and "ВСЕ" or unicode.sub(logFilter, 1, 12)
         gui.btn("filter_logs", 2, py, 24, 3, "ФИЛЬТР: " .. filterText, gui.COLORS.energy)
-        if log_filter ~= nil and log_filter ~= "" then
+        if logFilter ~= nil and logFilter ~= "" then
             gui.btn("clear_filter", 28, py, 14, 3, "СБРОСИТЬ", gui.COLORS.bad)
         end
     elseif substate == "deposit" then
@@ -321,7 +322,7 @@ end
 
 function gui.drawEditorModal(data)
     gui.buttons = {}
-    local w = 70; local h = 15 -- ИСПРАВЛЕНО: Увеличили высоту модального окна до 15
+    local w = 70; local h = 15 
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
@@ -370,7 +371,8 @@ function gui.drawCaseEditor(case, items)
             elseif item.chance < 60 then chanceColor = config.rarity_colors.uncommon
             end
             
-            text(x + 2, currentY, item.name, gui.COLORS.text, gui.COLORS.panel)
+            local qtyStr = (item.qty and item.qty > 1) and (" (x" .. item.qty .. ")") or ""
+            text(x + 2, currentY, item.name .. qtyStr, gui.COLORS.text, gui.COLORS.panel)
             text(x + 45, currentY, "Цена: " .. item.price, gui.COLORS.warn, gui.COLORS.panel)
             text(x + 60, currentY, "Шанс: " .. item.chance .. "%", chanceColor, gui.COLORS.panel)
             
@@ -388,7 +390,7 @@ end
 
 function gui.drawItemEditor(data, isDeposit)
     gui.buttons = {}
-    local w = 70; local h = isDeposit and 14 or 18
+    local w = 70; local h = isDeposit and 14 or 21 -- Увеличена высота для поля Кол-во
     local x = math.floor((W - w) / 2); local y = math.floor((H - h) / 2)
     
     rect(x-1, y-1, w+2, h+2, gui.COLORS.tileHeader)
@@ -409,6 +411,11 @@ function gui.drawItemEditor(data, isDeposit)
         text(x+4, y+11, "Шанс выпадения, % (число, можно дробное):", gui.COLORS.text, gui.COLORS.tileBg)
         local bgChance = (data.focus == "chance") and gui.COLORS.inputFocus or gui.COLORS.inputBg
         gui.btn("focus_chance", x+4, y+12, w-8, 1, data.chance .. ((data.focus == "chance") and "_" or ""), bgChance, gui.COLORS.good)
+
+        -- НОВОЕ ПОЛЕ: КОЛИЧЕСТВО
+        text(x+4, y+14, "Количество предметов (шт):", gui.COLORS.text, gui.COLORS.tileBg)
+        local bgQty = (data.focus == "qty") and gui.COLORS.inputFocus or gui.COLORS.inputBg
+        gui.btn("focus_qty", x+4, y+15, w-8, 1, data.qty .. ((data.focus == "qty") and "_" or ""), bgQty, gui.COLORS.energy)
     end
 
     gui.btn("item_ed_save", x + 4, y + h - 4, math.floor(w/2) - 6, 3, "СОХРАНИТЬ", gui.COLORS.good)
@@ -464,9 +471,12 @@ function gui.drawRoulette(strip, strip_pos)
         rect(item_start_x, item_y, cur_w, cur_h, rarity_color)
         rect(item_start_x + 1, item_y + 1, cur_w - 2, cur_h - 2, gui.COLORS.tileBg)
 
+        -- Учитываем количество в названии для прокрутки
+        local itemNameWithQty = item.name .. ((item.qty and item.qty > 1) and (" x" .. item.qty) or "")
+
         local lines = {}
         local curr = ""
-        for word in string.gmatch(item.name, "%S+") do
+        for word in string.gmatch(itemNameWithQty, "%S+") do
             if unicode.len(curr) + unicode.len(word) + 1 > cur_w - 4 then
                 if curr ~= "" then table.insert(lines, curr) end
                 curr = word
