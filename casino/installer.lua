@@ -1,8 +1,8 @@
 -- /lua/casino_installer.lua
 local internet = require("internet")
 
--- ССЫЛКА НА ТВОЙ РЕПОЗИТОРИЙ НА GITHUB (ИЗМЕНИТЬ НА ПРАВИЛЬНЫЙ)
-local repo = "https://raw.githubusercontent.com/bogdanshtatskiy-cpu/me-shop/main/casino/" -- ЗАГЛУШКА, НУЖНО ИЗМЕНИТЬ
+-- ССЫЛКА НА ТВОЙ РЕПОЗИТОРИЙ НА GITHUB
+local repo = "https://raw.githubusercontent.com/bogdanshtatskiy-cpu/me-shop/main/casino/" 
 
 local files = {
     "casino_config.lua",
@@ -18,10 +18,7 @@ print("Подключение к GitHub...\n")
 
 for _, file in ipairs(files) do
     io.write("Скачивание " .. file .. " ... ")
-    -- Предполагаем, что файлы в репозитории будут иметь те же имена, что и в `files`
-    local url = repo .. file:gsub("casino_", "") -- Убираем префикс для скачивания, если в репо они без него
-    
-    -- Если файлы в репо с префиксом, то строка выше должна быть: local url = repo .. file
+    local url = repo .. file:gsub("casino_", "") 
     
     local success, response = pcall(internet.request, url)
     
@@ -32,7 +29,6 @@ for _, file in ipairs(files) do
         if content:match("404: Not Found") then
             print("[ОШИБКА: Файл не найден]")
         else
-            -- Сохраняем файл с префиксом
             local f = io.open("/home/" .. file, "w")
             if f then
                 f:write(content)
