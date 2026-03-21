@@ -489,8 +489,13 @@ while true do
                         elseif action == "focus_chance" then ed_data.focus = "chance"
                         elseif action == "item_ed_cancel" then state = "admin_edit_case"
                         elseif action == "item_ed_save" then
-                            local price = tonumber(tostring(ed_data.price):gsub(",", "."))
-                            local chance = tonumber(tostring(ed_data.chance):gsub(",", "."))
+                            -- ИСПРАВЛЕНО: вытаскиваем строку до tonumber
+                            local p_str = tostring(ed_data.price):gsub(",", ".")
+                            local c_str = tostring(ed_data.chance):gsub(",", ".")
+                            
+                            local price = tonumber(p_str)
+                            local chance = tonumber(c_str)
+                            
                             if not price or not chance then
                                 ed_data.return_to = "admin_edit_item"
                                 showMsg("ОШИБКА", "Цена и шанс должны быть числами!", true, 4)
