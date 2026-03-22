@@ -52,6 +52,11 @@ local ITEMS_PER_PAGE = 6
 local adminPage = 1
 local ADMIN_ITEMS_PER_PAGE = 17
 
+-- === ПЕРЕМЕННЫЕ ДЛЯ БЕГУЩЕЙ СТРОКИ ===
+local marquee_offset = 0
+local marquee_str = "ИДЕТ ЗАГРУЗКА ИСТОРИИ ВЫИГРЫШЕЙ..."
+local marquee_timer = 0
+
 -- === КАСТОМНЫЙ КАЛЕНДАРЬ ===
 local function formatUnixTime(unix)
     local z = math.floor(unix / 86400) + 719468
@@ -217,13 +222,34 @@ local function loadDB()
     end
 end
 
-local function getTop3Players()
+-- === НОВЫЙ ТОП 15 ===
+local function getTop15Players()
     local sorted = {}
     for name, data in pairs(users_db) do table.insert(sorted, {name = name, spent = data.spent or 0}) end
     table.sort(sorted, function(a, b) return a.spent > b.spent end)
-    local top3 = {}
-    for i = 1, math.min(3, #sorted) do table.insert(top3, sorted[i]) end
-    return top3
+    local top15 = {}
+    for i = 1, math.min(15, #sorted) do table.insert(top15, sorted[i]) end
+    return top15
+end
+
+-- === ЧТЕНИЕ ПОБЕД ДЛЯ БЕГУЩЕЙ СТРОКИ ===
+local function getRecentWinsString()
+    local logs = loadLogsLocal("ВЫИГРЫШ")
+    local wins = {}
+    for _, line in ipairs(logs) do
+        -- Ищем паттерн в логе
+        local user, details = line:match("ВЫИГРЫШ%s*|%s*(.-)%s*|%s*(.*)")
+        if user and details then
+            -- Вытаскиваем предмет и кейс
+            local item, case = details:match("Выиграл (.-) из кейса (.*)")
+            if item and case then
+                table.insert(wins, string.format("*** %s: %s | %s ***", user, item, case))
+            end
+        end
+        if #wins >= 10 then break end
+    end
+    if #wins == 0 then return "ПОКА НИКТО НИЧЕГО НЕ ВЫИГРАЛ... БУДЬ ПЕРВЫМ!        " end
+    return table.concat(wins, "        ") .. "        "
 end
 
 local function getPageItems(list, perPage)
@@ -255,7 +281,11 @@ end
 
 local function refreshScreen()
     if state == "casino" then
-        gui.drawStatic(currentUser, currentUser and idleTimer or nil, getTop3Players(), casino_name, me.getDepositPrices())
+        -- Обновляем текст выигрышей
+        marquee_str = getRecentWinsString()
+        
+        gui.drawStatic(currentUser, currentUser and idleTimer or nil, getTop15Players(), casino_name, me.getDepositPrices())
+        gui.drawMarquee(marquee_str, marquee_offset)
         local pItems, maxPage = getPageItems(casino_cases, ITEMS_PER_PAGE)
         gui.drawCases(pItems, currentPage, maxPage)
         if not me_ok then component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg) end
@@ -292,7 +322,7 @@ local function refreshScreen()
         
         gui.drawAdmin(state:gsub("admin_", ""), pItems, adminPage, maxP, log_filter)
     elseif state == "editor" then
-        gui.drawStatic(currentUser, idleTimer, getTop3Players(), casino_name, me.getDepositPrices())
+        gui.drawStatic(currentUser, idleTimer, getTop15Players(), casino_name, me.getDepositPrices())
         gui.drawEditorModal(ed_data)
     end
 end
@@ -315,6 +345,13 @@ local last_tick = computer.uptime()
 local function casinoTick()
     local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.01)
     local current_uptime = computer.uptime()
+    
+    -- Двигатель бегущей строки (обновляется каждые 0.15 сек)
+    if state == "casino" and current_uptime - marquee_timer >= 0.15 then
+        marquee_timer = current_uptime
+        marquee_offset = marquee_offset + 1
+        gui.drawMarquee(marquee_str, marquee_offset)
+    end
     
     -- === СИСТЕМА ТОЧНОГО ВРЕМЕНИ ===
     if current_uptime - last_tick >= 1 then
@@ -396,7 +433,7 @@ local function casinoTick()
                 component.gpu.setForeground(0xFFFFFF)
                 require("term").clear()
                 print("Программа завершена администратором: " .. currentUser.name)
-                error("ADMIN_EXIT") -- <--- ВОТ ТУТ МЫ ГЕНЕРИРУЕМ ВЫХОД ДЛЯ СТОРОЖЕВОГО ПСА
+                error("ADMIN_EXIT")
             else
                 showMsg("ОТКАЗ В ДОСТУПЕ", "Только администратор может закрыть программу!", true, 3)
             end
