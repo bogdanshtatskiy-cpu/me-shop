@@ -101,46 +101,50 @@ function me.peekInput()
 end
 
 -- =========================================================
--- АДАПТИРОВАННАЯ ЛОГИКА ИЗ ТВОЕГО МАГАЗИНА (РАБОЧАЯ)
+-- ФИНАЛЬНАЯ ВЫДАЧА (ЛОГИКА МАГАЗИНА + БРОНЯ ОТ БАГОВ)
 -- =========================================================
 function me.givePrize(item_id, item_damage, qty)
-    -- Формируем отпечаток в точности как в твоем магазине
+    if not item_id or item_id == "" then
+        return false, "У предмета не указан Системный ID!", 0
+    end
+
+    -- Удаляем случайные пробелы, если они случайно скопировались из админки
+    item_id = item_id:match("^%s*(.-)%s*$")
+
+    -- ОТПЕЧАТОК 1 В 1 ИЗ ТВОЕГО МАГАЗИНА (Никакого damage, только dmg)
     local perfect_fingerprint = {
         id = item_id,
         dmg = math.floor(item_damage or 0)
     }
     
     local total_moved = 0
-    local last_err = "Сундук выдачи не найден ни над одним интерфейсом!"
+    local real_err = "Сундук выдачи не найден ни над одним интерфейсом!"
 
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
-        for side = 0, 5 do
-            -- Пытаемся выдать
+        
+        -- Пробуем и числа, и текстовые названия сторон, чтобы обойти баг с `0.0`
+        local sides_to_try = {0, 1, 2, 3, 4, 5, "DOWN", "UP", "NORTH", "SOUTH", "WEST", "EAST"}
+        
+        for _, side in ipairs(sides_to_try) do
             local ok, result = pcall(me_proxy.exportItem, perfect_fingerprint, side, qty)
             local moved_now = 0
             
-            if ok and type(result) == "table" and result.size then 
-                moved_now = result.size
-            elseif ok and type(result) == "number" then 
-                moved_now = result 
-            end
+            if ok and type(result) == "table" and result.size then moved_now = result.size
+            elseif ok and type(result) == "number" then moved_now = result end
             
             if moved_now > 0 then
                 total_moved = total_moved + moved_now
                 
-                -- Сторона найдена! Насос для остатка (копия из магазина)
+                -- Насос для остатка (стандартно из магазина)
                 local attempts = 0
                 while total_moved < qty and attempts < 150 do
                     local batch = qty - total_moved
                     local ok2, res2 = pcall(me_proxy.exportItem, perfect_fingerprint, side, batch)
                     local m2 = 0
                     
-                    if ok2 and type(res2) == "table" and res2.size then 
-                        m2 = res2.size
-                    elseif ok2 and type(res2) == "number" then 
-                        m2 = res2 
-                    end
+                    if ok2 and type(res2) == "table" and res2.size then m2 = res2.size
+                    elseif ok2 and type(res2) == "number" then m2 = res2 end
                     
                     if m2 > 0 then
                         total_moved = total_moved + m2
@@ -152,7 +156,11 @@ function me.givePrize(item_id, item_damage, qty)
                 
                 return true, "Успешно", total_moved
             elseif not ok then
-                last_err = tostring(result)
+                local err_str = tostring(result)
+                -- ВОТ ОНО: Мы игнорируем ложные ошибки от пустых сторон
+                if not err_str:match("No neighbour attached") and not err_str:match("not valid enum") then
+                    real_err = err_str
+                end
             end
         end
         if total_moved > 0 then break end
@@ -161,7 +169,8 @@ function me.givePrize(item_id, item_damage, qty)
     if total_moved > 0 then 
         return true, "Частично", total_moved
     else 
-        return false, "Ошибка мода: " .. last_err, 0 
+        -- Теперь, если МЭ сеть реально не найдет предмет, она честно напишет "Can't find item", а не вранье про сундук.
+        return false, "Ошибка мода: " .. real_err, 0 
     end
 end
 
