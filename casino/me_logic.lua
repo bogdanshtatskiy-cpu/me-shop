@@ -101,64 +101,58 @@ function me.peekInput()
 end
 
 -- =========================================================
--- ИДЕАЛЬНАЯ ВЫДАЧА (Копия из магазина + защита от фантомных ошибок)
+-- АДАПТИРОВАННАЯ ЛОГИКА ИЗ ТВОЕГО МАГАЗИНА (РАБОЧАЯ)
 -- =========================================================
 function me.givePrize(item_id, item_damage, qty)
-    if not item_id or item_id == "" then
-        return false, "У предмета не указан Системный ID!", 0
-    end
-
-    local dmg_num = math.floor(item_damage or 0)
-    local total_moved = 0
-    local real_err = "Сундук выдачи не найден ни над одним интерфейсом!"
-
-    -- 3 убойных варианта отпечатка (начиная с того, который работает в твоем магазине)
-    local fingerprints = {
-        { id = item_id, dmg = dmg_num },         -- Стандарт магазина
-        { id = item_id, damage = dmg_num },      -- Альтернативный ключ
-        { id = item_id, dmg = 32767 }            -- Wildcard (на случай жесткого NBT)
+    -- Формируем отпечаток в точности как в твоем магазине
+    local perfect_fingerprint = {
+        id = item_id,
+        dmg = math.floor(item_damage or 0)
     }
+    
+    local total_moved = 0
+    local last_err = "Сундук выдачи не найден ни над одним интерфейсом!"
 
     for addr in component.list("me_interface") do
         local me_proxy = component.proxy(addr)
-        
         for side = 0, 5 do
-            for _, fp in ipairs(fingerprints) do
-                local ok, result = pcall(me_proxy.exportItem, fp, side, qty - total_moved)
-                local moved_now = 0
+            -- Пытаемся выдать
+            local ok, result = pcall(me_proxy.exportItem, perfect_fingerprint, side, qty)
+            local moved_now = 0
+            
+            if ok and type(result) == "table" and result.size then 
+                moved_now = result.size
+            elseif ok and type(result) == "number" then 
+                moved_now = result 
+            end
+            
+            if moved_now > 0 then
+                total_moved = total_moved + moved_now
                 
-                if ok and type(result) == "table" and result.size then moved_now = result.size
-                elseif ok and type(result) == "number" then moved_now = result end
-                
-                if moved_now > 0 then
-                    total_moved = total_moved + moved_now
+                -- Сторона найдена! Насос для остатка (копия из магазина)
+                local attempts = 0
+                while total_moved < qty and attempts < 150 do
+                    local batch = qty - total_moved
+                    local ok2, res2 = pcall(me_proxy.exportItem, perfect_fingerprint, side, batch)
+                    local m2 = 0
                     
-                    -- Сторона найдена! Начинаем цикл-насос для остатка
-                    local attempts = 0
-                    while total_moved < qty and attempts < 150 do
-                        local batch = qty - total_moved
-                        local ok2, res2 = pcall(me_proxy.exportItem, fp, side, batch)
-                        local m2 = 0
-                        
-                        if ok2 and type(res2) == "table" and res2.size then m2 = res2.size
-                        elseif ok2 and type(res2) == "number" then m2 = res2 end
-                        
-                        if m2 > 0 then
-                            total_moved = total_moved + m2
-                        else
-                            break -- Сундук полон или ресы в МЭ кончились
-                        end
-                        attempts = attempts + 1
+                    if ok2 and type(res2) == "table" and res2.size then 
+                        m2 = res2.size
+                    elseif ok2 and type(res2) == "number" then 
+                        m2 = res2 
                     end
                     
-                    return true, "Успешно", total_moved
-                elseif not ok then
-                    local err_str = tostring(result)
-                    -- ВОТ ОНО! Сохраняем ТОЛЬКО настоящую ошибку, игнорируем пустые стороны без сундука
-                    if not err_str:match("No neighbour attached") then
-                        real_err = err_str
+                    if m2 > 0 then
+                        total_moved = total_moved + m2
+                    else
+                        break 
                     end
+                    attempts = attempts + 1
                 end
+                
+                return true, "Успешно", total_moved
+            elseif not ok then
+                last_err = tostring(result)
             end
         end
         if total_moved > 0 then break end
@@ -167,8 +161,7 @@ function me.givePrize(item_id, item_damage, qty)
     if total_moved > 0 then 
         return true, "Частично", total_moved
     else 
-        -- Теперь в чат будет выводиться НАСТОЯЩАЯ ошибка предмета
-        return false, "Ошибка мода: " .. real_err, 0 
+        return false, "Ошибка мода: " .. last_err, 0 
     end
 end
 
