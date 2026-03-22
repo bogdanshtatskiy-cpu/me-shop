@@ -15,6 +15,9 @@ local json = require("json")
 -- === ОТКЛЮЧАЕМ БЕЗУСЛОВНОЕ ЗАКРЫТИЕ НА CTRL+ALT+C ===
 event.shouldInterrupt = function() return false end
 
+-- === БРОНЯ ОТ ГОНКИ ЗАГРУЗКИ (Ждем 5 секунд, пока сервер прогрузит МЭ сеть и чанки) ===
+os.sleep(5)
+
 local me_ok, me_msg = me.init()
 local CUR = config.currency_name or "ЭМ"
 
@@ -299,7 +302,10 @@ end
 loadDB()
 refreshScreen()
 
-while true do
+-- =========================================================================
+-- ТЕЛО МАГАЗИНА, ВЫНЕСЕННОЕ В ОТДЕЛЬНУЮ ФУНКЦИЮ (ДЛЯ WATCHDOG)
+-- =========================================================================
+local function shopTick()
     local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(1)
     
     if not ev then 
@@ -632,5 +638,23 @@ while true do
                 end
             end
         end
+    end
+end
+
+-- =========================================================================
+-- СТОРОЖЕВОЙ ПЕС (WATCHDOG)
+-- =========================================================================
+while true do
+    local ok, err = pcall(shopTick)
+    if not ok then
+        local f = io.open("/home/shop_crash.log", "a")
+        if f then 
+            f:write(os.date("%Y-%m-%d %H:%M:%S") .. " | FATAL CRASH: " .. tostring(err) .. "\n")
+            f:close() 
+        end
+        
+        -- Даем серверу 3 секунды на подгрузку чанка и жестко перезагружаем комп
+        os.sleep(3)
+        computer.shutdown(true) 
     end
 end
