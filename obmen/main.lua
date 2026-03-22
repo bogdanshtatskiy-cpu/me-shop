@@ -147,6 +147,22 @@ local stockTimer = 0
 local function obmenTick()
     local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.05)
     
+    -- ПЕРЕХВАТЧИК ЗАКРЫТИЯ ПРИЛОЖЕНИЯ
+    if ev == "interrupted" then
+        if isAdminMode then
+            component.gpu.setBackground(0x000000)
+            component.gpu.setForeground(0xFFFFFF)
+            require("term").clear()
+            print("Программа завершена администратором.")
+            error("ADMIN_EXIT") -- Генерируем кодовое слово для выхода
+        else
+            ed_data = {title="ОТКАЗ В ДОСТУПЕ", msg="Войдите как админ, чтобы закрыть!", err=true}
+            state = "modal_msg"
+            refreshScreen()
+        end
+        return
+    end
+    
     if not ev then 
         if state == "main" and me_ok then
             tickTimer = tickTimer + 0.05
@@ -301,18 +317,20 @@ local function obmenTick()
 end
 
 -- =========================================================================
--- СТОРОЖЕВОЙ ПЕС (WATCHDOG) ЗАПУСКАЕТ ЦИКЛ В БРОНЕ
+-- СТОРОЖЕВОЙ ПЕС (WATCHDOG) С ВОЗМОЖНОСТЬЮ ВЫХОДА ДЛЯ АДМИНА
 -- =========================================================================
 while true do
     local ok, err = pcall(obmenTick)
     if not ok then
+        -- ПРОПУСКАЕМ АДМИНА В КОНСОЛЬ:
+        if tostring(err):match("ADMIN_EXIT") then break end
+        
         local f = io.open("/home/obmen_crash.log", "a")
         if f then 
             f:write(os.date("%Y-%m-%d %H:%M:%S") .. " | FATAL CRASH: " .. tostring(err) .. "\n")
             f:close() 
         end
         
-        -- Даем серверу 3 секунды на подгрузку чанка и жестко перезагружаем комп
         os.sleep(3)
         computer.shutdown(true) 
     end
