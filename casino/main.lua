@@ -698,19 +698,20 @@ end
 -- СТОРОЖЕВОЙ ПЕС (WATCHDOG) ЗАПУСКАЕТ ЦИКЛ В БРОНЕ
 -- =========================================================================
 while true do
-    local ok, err = pcall(casinoTick)
+    local ok, err = pcall(casinoTick) -- В магазине тут shopTick, в обменнике obmenTick
     if not ok then
-        -- Если поймали фатальный краш (пропал монитор, выгрузился чанк)
-        local f = io.open("/home/casino_crash.log", "a")
+        -- ПРОПУСКАЕМ АДМИНА В КОНСОЛЬ:
+        if tostring(err):match("ADMIN_EXIT") then
+            break -- Разрываем бесконечный цикл и выходим в систему!
+        end
+        
+        local f = io.open("/home/crash.log", "a")
         if f then 
             f:write(os.date("%Y-%m-%d %H:%M:%S") .. " | FATAL CRASH: " .. tostring(err) .. "\n")
             f:close() 
         end
         
-        -- Даем серверу передышку 3 секунды, если это был микролаг
         os.sleep(3)
-        
-        -- Жестко перезагружаем комп, чтобы он заново нашел все живые блоки в чанке
         computer.shutdown(true) 
     end
 end
