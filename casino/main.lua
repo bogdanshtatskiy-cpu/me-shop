@@ -15,6 +15,9 @@ local json = require("casino_json")
 -- === ОТКЛЮЧАЕМ БЕЗУСЛОВНОЕ ЗАКРЫТИЕ НА CTRL+ALT+C ===
 event.shouldInterrupt = function() return false end
 
+-- === БРОНЯ ОТ ГОНКИ ЗАГРУЗКИ (Ждем 5 секунд, пока сервер прогрузит МЭ сеть и чанки) ===
+os.sleep(5)
+
 -- === ИНИЦИАЛИЗАЦИЯ ИСТИННОГО РАНДОМА ===
 math.randomseed(os.time() + (os.clock() * 1000))
 
@@ -306,7 +309,10 @@ refreshScreen()
 
 local last_tick = computer.uptime()
 
-while true do
+-- =========================================================================
+-- ВЕСЬ ТЕЛО ЦИКЛА ВЫНЕСЕНО В ФУНКЦИЮ ДЛЯ ЗАЩИТЫ ОТ ВЫГРУЗКИ ЧАНКОВ
+-- =========================================================================
+local function casinoTick()
     local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.01)
     local current_uptime = computer.uptime()
     
@@ -685,5 +691,26 @@ while true do
                 end
             end
         end
+    end
+end
+
+-- =========================================================================
+-- СТОРОЖЕВОЙ ПЕС (WATCHDOG) ЗАПУСКАЕТ ЦИКЛ В БРОНЕ
+-- =========================================================================
+while true do
+    local ok, err = pcall(casinoTick)
+    if not ok then
+        -- Если поймали фатальный краш (пропал монитор, выгрузился чанк)
+        local f = io.open("/home/casino_crash.log", "a")
+        if f then 
+            f:write(os.date("%Y-%m-%d %H:%M:%S") .. " | FATAL CRASH: " .. tostring(err) .. "\n")
+            f:close() 
+        end
+        
+        -- Даем серверу передышку 3 секунды, если это был микролаг
+        os.sleep(3)
+        
+        -- Жестко перезагружаем комп, чтобы он заново нашел все живые блоки в чанке
+        computer.shutdown(true) 
     end
 end
