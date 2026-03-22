@@ -60,11 +60,9 @@ local function formatUnixTime(unix)
     local d = doy - math.floor((153 * mp + 2) / 5) + 1
     local m = mp + (mp < 10 and 3 or -9)
     y = y + (m <= 2 and 1 or 0)
-    
     local h = math.floor((unix % 86400) / 3600)
     local min = math.floor((unix % 3600) / 60)
     local s = math.floor(unix % 60)
-    
     return string.format("%04d-%02d-%02d %02d:%02d:%02d", y, m, d, h, min, s)
 end
 
@@ -72,53 +70,38 @@ end
 local function getRealTime()
     local tz = tonumber(config.timezone) or 0
     local tmp_file = "/home/HostTime.tmp"
-    
     local file = io.open(tmp_file, "w")
     if file then
-        file:write("")
-        file:close()
-        
+        file:write(""); file:close()
         local lastModifiedMs = fs.lastModified(tmp_file)
         fs.remove(tmp_file)
-        
         if lastModifiedMs and lastModifiedMs > 0 then
             local current_unix = math.floor(lastModifiedMs / 1000)
             return formatUnixTime(current_unix + (tz * 3600))
         end
     end
-    
     return os.date("%Y-%m-%d %H:%M:%S") .. " (Игр.)"
 end
 
 local function writeLog(action, user, details)
     local time_str = getRealTime()
     local log_line = string.format("[%s] %s | %s | %s", time_str, action, user, details)
-    
     local f = io.open("/home/shop_logs.txt", "a")
     if f then f:write(log_line .. "\n"); f:close() end
     
     if config.use_database and component.isAvailable("internet") then
-        pcall(function() 
-            network.request("POST", "/logs", json.encode({ time = time_str, action = action, user = user, details = details })) 
-        end)
+        pcall(function() network.request("POST", "/logs", json.encode({ time = time_str, action = action, user = user, details = details })) end)
     end
 
-    -- === УМНАЯ АВТООЧИСТКА ЛОГОВ (Лимит 200 КБ) ===
     local size = fs.size("/home/shop_logs.txt")
     if size and size > 200000 then 
         local lines = {}
         local fr = io.open("/home/shop_logs.txt", "r")
-        if fr then
-            for line in fr:lines() do table.insert(lines, line) end
-            fr:close()
-        end
-        
+        if fr then for line in fr:lines() do table.insert(lines, line) end; fr:close() end
         local fw = io.open("/home/shop_logs.txt", "w")
         if fw then
             local start_idx = math.max(1, #lines - 200)
-            for i = start_idx, #lines do
-                fw:write(lines[i] .. "\n")
-            end
+            for i = start_idx, #lines do fw:write(lines[i] .. "\n") end
             fw:close()
         end
     end
@@ -129,9 +112,7 @@ local function loadLogsLocal(filter)
     local f = io.open("/home/shop_logs.txt", "r")
     if f then
         for line in f:lines() do 
-            if not filter or filter == "" or string.find(unicode.lower(line), unicode.lower(filter), 1, true) then
-                table.insert(logs, line)
-            end
+            if not filter or filter == "" or string.find(unicode.lower(line), unicode.lower(filter), 1, true) then table.insert(logs, line) end
         end
         f:close()
     end
@@ -173,10 +154,8 @@ local function saveUser()
     if not currentUser then return end
     if not users_db[currentUser.name] then users_db[currentUser.name] = {} end
     users_db[currentUser.name].balance = currentUser.balance
-    
     local f = io.open("/home/users.json", "w")
     if f then f:write(json.encode(users_db)); f:close() end
-    
     if config.use_database and component.isAvailable("internet") then
         pcall(function() network.put("/users/" .. currentUser.name, json.encode({ balance = currentUser.balance })) end)
     end
@@ -187,7 +166,6 @@ local function saveShop()
     local encoded = json.encode(data)
     local f = io.open("/home/shop_data.json", "w")
     if f then f:write(encoded); f:close() end
-    
     if config.use_database and component.isAvailable("internet") then
         pcall(function() network.put("/shop", encoded) end)
     end
@@ -205,7 +183,6 @@ local function loadDB()
                 if parsed.shop_name then shop_name = parsed.shop_name end
             end
         else loadShopLocal() end
-        
         local succ_u, res_u = network.get("/users")
         if succ_u and res_u and res_u ~= "null" then
             local parsed_u = json.decode(res_u)
@@ -262,19 +239,15 @@ local function refreshScreen()
         gui.drawItems(pItems, currentPage, maxPage)
         gui.drawBuybackItems(shop_buyback)
         if not me_ok then component.gpu.set(2, component.gpu.getResolution(), "СИСТЕМНАЯ ОШИБКА: " .. me_msg) end
-        
     elseif state == "modal_qty" then
         gui.drawStatic(currentUser, idleTimer, #cart, getTop3Players(), shop_name)
         gui.drawQuantitySelector(selectedItem, selectedQty, isCartMode)
-        
     elseif state == "cart" then
         gui.drawStatic(currentUser, idleTimer, #cart, getTop3Players(), shop_name)
         gui.drawCart(cart)
-        
     elseif string.match(state, "admin") and state ~= "admin_wait_scan" then
         local listToPass = {}
         local perPage = ADMIN_ITEMS_PER_PAGE
-        
         if state == "admin_cat" then listToPass = categories
         elseif state == "admin_item" then listToPass = shop_items
         elseif state == "admin_buy" then listToPass = shop_buyback
@@ -282,10 +255,8 @@ local function refreshScreen()
             listToPass = loadLogsLocal(log_filter)
             perPage = 30
         end
-        
         local pItems, maxP = getAdminPageItems(listToPass, perPage)
         gui.drawAdmin(state:gsub("admin_", ""), pItems, adminPage, maxP, log_filter)
-        
     elseif state == "editor" then
         gui.drawStatic(currentUser, idleTimer, #cart, getTop3Players(), shop_name)
         gui.drawEditorModal(ed_data, categories)
@@ -298,7 +269,6 @@ local function showMsg(title, text, isError, timeout)
     gui.drawNotification(title, text, isError)
 end
 
--- Инициализация
 loadDB()
 refreshScreen()
 
@@ -310,12 +280,10 @@ local function shopTick()
     
     if not ev then 
         local shouldRefreshFull = false
-
         if state == "modal_msg" and msgTimer > 0 then
             msgTimer = msgTimer - 1
             if msgTimer <= 0 then state = "shop"; shouldRefreshFull = true end
         end
-
         if currentUser and state ~= "modal_msg" and state ~= "admin_wait_scan" and state ~= "editor" and not string.match(state, "admin") then
             idleTimer = idleTimer - 1
             if idleTimer <= 0 then 
@@ -325,7 +293,6 @@ local function shopTick()
                 if state == "shop" or state == "modal_qty" or state == "cart" then gui.drawTick(currentUser, idleTimer) end
             end
         end
-
         if state == "shop" and not shouldRefreshFull then
             if config.use_database and component.isAvailable("internet") then
                 syncTimer = syncTimer - 1
@@ -353,9 +320,7 @@ local function shopTick()
                 end
             end
         end
-
         if shouldRefreshFull then refreshScreen() end
-    
     else
         if currentUser then idleTimer = 30 end
 
@@ -366,7 +331,7 @@ local function shopTick()
                 component.gpu.setForeground(0xFFFFFF)
                 require("term").clear()
                 print("Программа завершена администратором: " .. currentUser.name)
-                os.exit()
+                error("ADMIN_EXIT") -- Генерируем кодовое слово для выхода
             else
                 showMsg("ОТКАЗАНО В ДОСТУПЕ", "Только администратор может закрыть программу!", true, 3)
             end
@@ -642,18 +607,20 @@ local function shopTick()
 end
 
 -- =========================================================================
--- СТОРОЖЕВОЙ ПЕС (WATCHDOG)
+-- СТОРОЖЕВОЙ ПЕС (WATCHDOG) С ВОЗМОЖНОСТЬЮ ВЫХОДА ДЛЯ АДМИНА
 -- =========================================================================
 while true do
     local ok, err = pcall(shopTick)
     if not ok then
+        -- ПРОПУСКАЕМ АДМИНА В КОНСОЛЬ:
+        if tostring(err):match("ADMIN_EXIT") then break end
+        
         local f = io.open("/home/shop_crash.log", "a")
         if f then 
             f:write(os.date("%Y-%m-%d %H:%M:%S") .. " | FATAL CRASH: " .. tostring(err) .. "\n")
             f:close() 
         end
         
-        -- Даем серверу 3 секунды на подгрузку чанка и жестко перезагружаем комп
         os.sleep(3)
         computer.shutdown(true) 
     end
