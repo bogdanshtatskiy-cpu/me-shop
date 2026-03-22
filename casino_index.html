@@ -227,10 +227,10 @@
         </div>
 
         <div id="player-stats-modal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm p-4 animate-fade-in">
-            <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                 <div class="bg-gray-800 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
                     <h3 class="text-xl font-bold text-white flex items-center gap-2">
-                        <span>Статистика:</span> <span id="stats-player-name" class="text-purple-400"></span>
+                        <span>Статистика игрока:</span> <span id="stats-player-name" class="text-purple-400"></span>
                     </h3>
                     <button onclick="closePlayerStatsModal()" class="text-gray-400 hover:text-white transition text-xl font-bold">✕</button>
                 </div>
@@ -243,16 +243,23 @@
                             <div id="stats-balance" class="text-xl font-black text-yellow-400">0 ЭМ</div>
                         </div>
                         <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                            <div class="text-xs text-gray-400 uppercase font-bold mb-1">Всего потрачено</div>
-                            <div id="stats-spent" class="text-xl font-black text-white">0 ЭМ</div>
+                            <div class="text-xs text-gray-400 uppercase font-bold mb-1" title="Накопительное значение из базы данных">Потрачено (Всего)</div>
+                            <div id="stats-spent-total" class="text-xl font-black text-white">0 ЭМ</div>
                         </div>
-                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                            <div class="text-xs text-gray-400 uppercase font-bold mb-1">Всего выиграно</div>
+                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 relative group">
+                            <div class="text-xs text-gray-400 uppercase font-bold mb-1 border-b border-dashed border-gray-500 inline-block cursor-help">Потрачено (Логи)</div>
+                            <div id="stats-spent-logs" class="text-xl font-black text-gray-300">0 ЭМ</div>
+                            <div class="absolute bottom-full left-0 mb-2 w-48 bg-black text-xs text-gray-300 p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none">Сумма всех открытых кейсов из доступной истории логов.</div>
+                        </div>
+                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 relative group">
+                            <div class="text-xs text-gray-400 uppercase font-bold mb-1 border-b border-dashed border-gray-500 inline-block cursor-help">Выиграно (Логи)</div>
                             <div id="stats-won" class="text-xl font-black text-green-400">0 ЭМ</div>
+                            <div class="absolute bottom-full right-0 mb-2 w-48 bg-black text-xs text-gray-300 p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none">Фактическая стоимость всех выигранных предметов из истории.</div>
                         </div>
-                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                            <div class="text-xs text-gray-400 uppercase font-bold mb-1">Профит игрока</div>
+                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 relative group">
+                            <div class="text-xs text-gray-400 uppercase font-bold mb-1 border-b border-dashed border-gray-500 inline-block cursor-help">Профит (Логи)</div>
                             <div id="stats-profit" class="text-xl font-black">0 ЭМ</div>
+                            <div class="absolute bottom-full left-0 mb-2 w-48 bg-black text-xs text-gray-300 p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none">Разница между "Выиграно" и "Потрачено" в доступных логах. Плюс - игрок в плюсе.</div>
                         </div>
                         <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
                             <div class="text-xs text-gray-400 uppercase font-bold mb-1">Сумма пополнений</div>
@@ -262,13 +269,13 @@
                             <div class="text-xs text-gray-400 uppercase font-bold mb-1">Открыто кейсов</div>
                             <div id="stats-cases-opened" class="text-xl font-black text-white">0 шт.</div>
                         </div>
-                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 col-span-2 md:col-span-2">
+                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 col-span-2 md:col-span-1">
                             <div class="text-xs text-gray-400 uppercase font-bold mb-1">Лучший выигрыш</div>
                             <div id="stats-best-win" class="text-sm font-bold text-purple-400 truncate">Нет данных</div>
                         </div>
                     </div>
 
-                    <h4 class="text-lg font-bold text-white mb-3 border-b border-gray-700 pb-2">История действий (последние 50)</h4>
+                    <h4 class="text-lg font-bold text-white mb-3 border-b border-gray-700 pb-2">История действий (последние 100 логов игрока)</h4>
                     <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
                         <table class="w-full text-left text-sm">
                             <thead class="bg-gray-900 border-b border-gray-700">
@@ -371,9 +378,7 @@
                 for (const key in logsRaw) { 
                     globalAllLogs.push(logsRaw[key]); 
                 }
-                // Сортируем от новых к старым (предполагая, что ключи или время упорядочиваемы,
-                // но для надежности лучше просто reverse, если они писались по порядку)
-                // Для точной сортировки по дате можно распарсить время, но пока оставим reverse
+                // Сортировка логов от новых к старым
                 globalAllLogs.sort((a,b) => new Date(b.time.replace(/\[|\]/g, '')) - new Date(a.time.replace(/\[|\]/g, '')));
                 
                 globalLogs = globalAllLogs.slice(0, 200); 
@@ -403,20 +408,25 @@
                     const match = log.details.match(/Выиграл (.*) \(x(\d+)\) из кейса (.*)/);
                     if (match) {
                         const itemName = match[1];
+                        const qty = Number(match[2]);
                         const caseName = match[3];
 
                         let itemPrice = 0;
-                        let found = false;
-                        for (const c of globalCases) {
-                            if (c && c.name === caseName && c.items) {
-                                const fItem = c.items.find(it => it.name === itemName);
-                                if (fItem) { itemPrice = Number(fItem.price) || 0; found = true; break; }
-                            }
+                        let c = globalCases.find(c => c && c.name === caseName);
+                        
+                        if (c && c.items) {
+                            // ИЩЕМ СТРОГО ПО ИМЕНИ И КОЛИЧЕСТВУ
+                            let fItem = c.items.find(it => it.name === itemName && Number(it.qty) === qty);
+                            if (!fItem) fItem = c.items.find(it => it.name === itemName); // Фоллбэк
+                            if (fItem) { itemPrice = Number(fItem.price) || 0; }
                         }
-                        if (!found) {
-                            for (const c of globalCases) {
-                                if (c && c.items) {
-                                    const fItem = c.items.find(it => it.name === itemName);
+                        
+                        // Если кейс удалили, пытаемся найти предмет в других кейсах
+                        if (itemPrice === 0) {
+                            for (const fallbackCase of globalCases) {
+                                if (fallbackCase && fallbackCase.items) {
+                                    let fItem = fallbackCase.items.find(it => it.name === itemName && Number(it.qty) === qty);
+                                    if (!fItem) fItem = fallbackCase.items.find(it => it.name === itemName);
                                     if (fItem) { itemPrice = Number(fItem.price) || 0; break; }
                                 }
                             }
@@ -497,7 +507,9 @@
                 
                 list.innerHTML += `
                     <tr class="hover:bg-gray-800/50 transition">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-white player-link" onclick="openPlayerStatsModal('${name}')">${name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-white player-link" onclick="openPlayerStatsModal('${name}')" title="Кликните для подробной статистики">
+                            ${name}
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${spent} ЭМ</td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="number" id="bal-${name}" value="${balance}" class="w-32 bg-gray-900 text-yellow-400 font-mono font-bold px-3 py-1.5 rounded border border-gray-700 focus:outline-none focus:border-purple-500">
@@ -561,7 +573,7 @@
             });
         }
 
-        // ================= СТАТИСТИКА ИГРОКА =================
+        // ================= СТАТИСТИКА КОНКРЕТНОГО ИГРОКА =================
         window.openPlayerStatsModal = function(playerName) {
             document.getElementById('stats-player-name').innerText = playerName;
             
@@ -570,11 +582,12 @@
             if (!uData) uData = {balance:0, spent:0};
             
             document.getElementById('stats-balance').innerText = (uData.balance || 0) + ' ЭМ';
-            document.getElementById('stats-spent').innerText = (uData.spent || 0) + ' ЭМ';
+            document.getElementById('stats-spent-total').innerText = (uData.spent || 0) + ' ЭМ';
             
             let totalDeposited = 0;
             let totalWon = 0;
             let casesOpened = 0;
+            let spentInLogs = 0;
             let bestWinItem = "";
             let bestWinPrice = -1;
             
@@ -594,39 +607,50 @@
                         const match = log.details.match(/Выиграл (.*) \(x(\d+)\) из кейса (.*)/);
                         if (match) {
                             const itemName = match[1];
+                            const qty = Number(match[2]);
                             const caseName = match[3];
 
                             let itemPrice = 0;
+                            let casePrice = 0;
                             let found = false;
-                            // Ищем цену
-                            for (const c of globalCases) {
-                                if (c && c.name === caseName && c.items) {
-                                    const fItem = c.items.find(it => it.name === itemName);
-                                    if (fItem) { itemPrice = Number(fItem.price) || 0; found = true; break; }
+                            
+                            let c = globalCases.find(c => c && c.name === caseName);
+                            if (c) {
+                                casePrice = Number(c.price) || 0;
+                                if (c.items) {
+                                    // Жесткий поиск по имени и количеству
+                                    let fItem = c.items.find(it => it.name === itemName && Number(it.qty) === qty);
+                                    if (!fItem) fItem = c.items.find(it => it.name === itemName);
+                                    if (fItem) { itemPrice = Number(fItem.price) || 0; found = true; }
                                 }
                             }
+                            
                             if (!found) {
-                                for (const c of globalCases) {
-                                    if (c && c.items) {
-                                        const fItem = c.items.find(it => it.name === itemName);
+                                for (const fallbackCase of globalCases) {
+                                    if (fallbackCase && fallbackCase.items) {
+                                        let fItem = fallbackCase.items.find(it => it.name === itemName && Number(it.qty) === qty);
+                                        if (!fItem) fItem = fallbackCase.items.find(it => it.name === itemName);
                                         if (fItem) { itemPrice = Number(fItem.price) || 0; break; }
                                     }
                                 }
                             }
                             
+                            spentInLogs += casePrice;
                             totalWon += itemPrice;
                             
                             if (itemPrice > bestWinPrice) {
                                 bestWinPrice = itemPrice;
-                                bestWinItem = `${itemName} (${itemPrice} ЭМ)`;
+                                bestWinItem = `${itemName} (x${qty}) — ${itemPrice} ЭМ`;
                             }
                         }
                     }
                 }
             });
             
-            let profit = totalWon - (uData.spent || 0);
+            // Вычисляем профит именно по логам, чтобы математика сходилась идеально
+            let profit = totalWon - spentInLogs;
             let profitEl = document.getElementById('stats-profit');
+            
             if (profit > 0) {
                 profitEl.innerText = "+" + profit + " ЭМ";
                 profitEl.className = "text-xl font-black text-green-400";
@@ -638,17 +662,18 @@
                 profitEl.className = "text-xl font-black text-gray-400";
             }
             
+            document.getElementById('stats-spent-logs').innerText = spentInLogs + " ЭМ";
             document.getElementById('stats-won').innerText = totalWon + " ЭМ";
             document.getElementById('stats-deposited').innerText = totalDeposited + " ЭМ";
             document.getElementById('stats-cases-opened').innerText = casesOpened + " шт.";
             document.getElementById('stats-best-win').innerText = bestWinPrice > -1 ? bestWinItem : "Нет данных";
             
-            // История
+            // Рендер истории
             let histHtml = "";
-            let recentLogs = playerLogs.slice(0, 50); // Учитывая что globalAllLogs уже reverse
+            let recentLogs = playerLogs.slice(0, 100);
             
             if (recentLogs.length === 0) {
-                histHtml = `<tr><td colspan="3" class="px-4 py-3 text-center text-gray-500">Нет истории действий</td></tr>`;
+                histHtml = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500">Нет истории действий в текущих логах</td></tr>`;
             } else {
                 recentLogs.forEach(log => {
                     let actionColor = "text-gray-400 bg-gray-800";
@@ -657,12 +682,12 @@
                     if(log.action.includes("ОШИБКА") || log.action.includes("УДАЛЕН")) actionColor = "text-red-400 bg-red-900/30 border border-red-800";
 
                     histHtml += `
-                        <tr class="hover:bg-gray-800/80 transition">
-                            <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-500 font-mono">${(log.time||"").replace(/\[|\]/g, '')}</td>
-                            <td class="px-4 py-2 whitespace-nowrap">
+                        <tr class="hover:bg-gray-800/80 transition border-b border-gray-700/30 last:border-0">
+                            <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500 font-mono">${(log.time||"").replace(/\[|\]/g, '')}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">
                                 <span class="text-[10px] font-bold px-2 py-1 rounded ${actionColor}">${log.action}</span>
                             </td>
-                            <td class="px-4 py-2 text-sm text-gray-300">${log.details}</td>
+                            <td class="px-4 py-3 text-sm text-gray-300 w-full">${log.details}</td>
                         </tr>
                     `;
                 });
