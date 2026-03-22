@@ -11,6 +11,12 @@ local computer = require("computer")
 local config = require("config")
 local me = require("me_logic")
 
+-- === ОТКЛЮЧАЕМ БЕЗУСЛОВНОЕ ЗАКРЫТИЕ НА CTRL+ALT+C ===
+event.shouldInterrupt = function() return false end
+
+-- === БРОНЯ ОТ ГОНКИ ЗАГРУЗКИ (Ждем 5 секунд, пока прогрузятся МЭ сеть и чанки) ===
+os.sleep(5)
+
 local me_ok, me_msg = me.init()
 local trades = {}
 local state = "main"
@@ -135,7 +141,10 @@ if not me_ok then ed_data={title="ОШИБКА СИСТЕМЫ", msg=me_msg, err=
 local tickTimer = 0
 local stockTimer = 0
 
-while true do
+-- =========================================================================
+-- ВЕСЬ ТЕЛО ЦИКЛА ВЫНЕСЕНО В ФУНКЦИЮ ДЛЯ ЗАЩИТЫ ОТ ВЫГРУЗКИ ЧАНКОВ
+-- =========================================================================
+local function obmenTick()
     local ev, _, arg1, arg2, arg3, arg4, arg5 = event.pull(0.05)
     
     if not ev then 
@@ -288,5 +297,23 @@ while true do
                 elseif dir < 0 and adminPage < adminMaxPage then adminPage = adminPage + 1; refreshScreen() end
             end
         end
+    end
+end
+
+-- =========================================================================
+-- СТОРОЖЕВОЙ ПЕС (WATCHDOG) ЗАПУСКАЕТ ЦИКЛ В БРОНЕ
+-- =========================================================================
+while true do
+    local ok, err = pcall(obmenTick)
+    if not ok then
+        local f = io.open("/home/obmen_crash.log", "a")
+        if f then 
+            f:write(os.date("%Y-%m-%d %H:%M:%S") .. " | FATAL CRASH: " .. tostring(err) .. "\n")
+            f:close() 
+        end
+        
+        -- Даем серверу 3 секунды на подгрузку чанка и жестко перезагружаем комп
+        os.sleep(3)
+        computer.shutdown(true) 
     end
 end
