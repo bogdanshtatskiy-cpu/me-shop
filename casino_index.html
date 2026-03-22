@@ -14,8 +14,8 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #111827; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
-        input { transition: all 0.2s ease-in-out; }
-        input:focus { transform: scale(1.02); z-index: 10; box-shadow: 0 0 10px rgba(168, 85, 247, 0.5); }
+        input, select { transition: all 0.2s ease-in-out; }
+        input:focus, select:focus { transform: scale(1.02); z-index: 10; box-shadow: 0 0 10px rgba(168, 85, 247, 0.5); }
         .glass-panel { background: rgba(31, 41, 55, 0.7); backdrop-filter: blur(10px); }
         .player-link { cursor: pointer; transition: color 0.2s; }
         .player-link:hover { color: #a855f7; text-decoration: underline; }
@@ -68,12 +68,6 @@
                         <button onclick="logout()" class="px-4 py-2 rounded-lg text-sm font-bold text-white bg-red-600/20 hover:bg-red-600 border border-red-500/50 hover:border-red-500 transition">Выход</button>
                     </div>
                 </div>
-                 <div class="md:hidden pb-3 pt-1 flex space-x-2 overflow-x-auto custom-scrollbar">
-                    <button onclick="switchTab('analytics')" class="tab-btn flex-none px-4 py-2 rounded-md text-sm font-semibold bg-gray-800 text-white" id="tab-analytics-mob">Аналитика</button>
-                    <button onclick="switchTab('cases')" class="tab-btn flex-none px-4 py-2 rounded-md text-sm font-semibold text-gray-400" id="tab-cases-mob">Кейсы</button>
-                    <button onclick="switchTab('users')" class="tab-btn flex-none px-4 py-2 rounded-md text-sm font-semibold text-gray-400" id="tab-users-mob">Игроки</button>
-                    <button onclick="switchTab('logs')" class="tab-btn flex-none px-4 py-2 rounded-md text-sm font-semibold text-gray-400" id="tab-logs-mob">Логи</button>
-                </div>
             </div>
         </nav>
 
@@ -92,7 +86,6 @@
                     <div class="relative z-10">
                         <h3 class="text-sm font-bold tracking-widest uppercase mb-2 opacity-80" id="hero-subtitle">Фактическая чистая прибыль</h3>
                         <div class="text-5xl md:text-7xl font-black drop-shadow-md tracking-tight" id="hero-title">ЗАГРУЗКА...</div>
-                        <p class="mt-3 text-sm font-medium opacity-75 max-w-xl">Эта цифра — реальная чистая прибыль казино, высчитанная из суммы всех открытых кейсов за вычетом фактической стоимости всех выданных предметов.</p>
                     </div>
                     <div class="relative z-10 text-8xl md:text-9xl opacity-20 drop-shadow-2xl" id="hero-icon">📈</div>
                 </div>
@@ -101,40 +94,31 @@
                     <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-md">
                         <div class="text-gray-400 text-xs font-bold uppercase mb-1">Суммарный оборот</div>
                         <div class="text-2xl font-black text-white" id="stat-spent">0 ЭМ</div>
-                        <div class="text-xs text-gray-500 mt-1">Всего потрачено на кейсы</div>
                     </div>
                     <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-md">
                         <div class="text-gray-400 text-xs font-bold uppercase mb-1">Выдано призами</div>
                         <div class="text-2xl font-black text-blue-400" id="stat-given">0 ЭМ</div>
-                        <div class="text-xs text-gray-500 mt-1">Фактическая стоимость дропа</div>
                     </div>
                     <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-md">
                         <div class="text-gray-400 text-xs font-bold uppercase mb-1">Внесено игроками</div>
                         <div class="text-2xl font-black text-green-400" id="stat-deposited">0 ЭМ</div>
-                        <div class="text-xs text-gray-500 mt-1">Сумма всех пополнений</div>
                     </div>
                     <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-md">
-                        <div class="text-gray-400 text-xs font-bold uppercase mb-1">Обязательства (Балансы)</div>
+                        <div class="text-gray-400 text-xs font-bold uppercase mb-1">Обязательства</div>
                         <div class="text-2xl font-black text-yellow-400" id="stat-balances">0 ЭМ</div>
-                        <div class="text-xs text-gray-500 mt-1">Остаток на счетах игроков</div>
                     </div>
                     <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-md">
                         <div class="text-gray-400 text-xs font-bold uppercase mb-1">Всего игроков</div>
                         <div class="text-2xl font-black text-white" id="stat-users">0</div>
-                        <div class="text-xs text-gray-500 mt-1">Уникальных пользователей</div>
                     </div>
                     <div class="bg-gray-800 rounded-xl p-5 border border-gray-700 shadow-md">
                         <div class="text-gray-400 text-xs font-bold uppercase mb-1">Фактическая отдача (RTP)</div>
                         <div class="text-2xl font-black text-purple-400" id="stat-rtp">0%</div>
-                        <div class="text-xs text-gray-500 mt-1">% реального возврата игрокам</div>
                     </div>
                 </div>
-
                 <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 shadow-md">
                     <h3 class="text-lg font-bold mb-4 text-white">Топ-10 игроков по тратам</h3>
-                    <div class="h-64 w-full">
-                        <canvas id="topSpendersChart"></canvas>
-                    </div>
+                    <div class="h-64 w-full"><canvas id="topSpendersChart"></canvas></div>
                 </div>
             </div>
 
@@ -145,21 +129,18 @@
                         <span>+ Добавить игрока</span>
                     </button>
                 </div>
-                
                 <div class="bg-gray-800 shadow-xl rounded-xl border border-gray-700 overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <thead class="bg-gray-900 border-b border-gray-700">
-                                <tr>
-                                    <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Никнейм</th>
-                                    <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Потрачено всего</th>
-                                    <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Текущий баланс (ЭМ)</th>
-                                    <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Действия</th>
-                                </tr>
-                            </thead>
-                            <tbody id="users-list" class="divide-y divide-gray-700"></tbody>
-                        </table>
-                    </div>
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-900 border-b border-gray-700">
+                            <tr>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Никнейм</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Потрачено всего</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase">Текущий баланс (ЭМ)</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-400 uppercase text-right">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-list" class="divide-y divide-gray-700"></tbody>
+                    </table>
                 </div>
             </div>
 
@@ -186,7 +167,7 @@
             </div>
 
             <div id="content-logs" class="tab-content hidden animate-fade-in">
-                <h2 class="text-2xl font-black mb-6 text-white">Журнал транзакций (последние 200)</h2>
+                <h2 class="text-2xl font-black mb-6 text-white">Журнал транзакций</h2>
                 <div class="bg-gray-800 shadow-xl rounded-xl border border-gray-700 overflow-hidden">
                     <div class="overflow-x-auto max-h-[80vh] custom-scrollbar">
                         <table class="w-full text-left border-collapse">
@@ -203,7 +184,6 @@
                     </div>
                 </div>
             </div>
-            
         </main>
         
         <div id="add-user-modal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm p-4 animate-fade-in">
@@ -215,13 +195,13 @@
                 <div class="p-6 space-y-4">
                     <div>
                         <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Никнейм в игре</label>
-                        <input type="text" id="new-user-name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-purple-500 outline-none" placeholder="Steve">
+                        <input type="text" id="new-user-name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-purple-500 outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Начальный баланс (ЭМ)</label>
                         <input type="number" id="new-user-bal" value="0" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-yellow-400 font-mono focus:border-yellow-500 outline-none">
                     </div>
-                    <button onclick="confirmAddUser()" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-2.5 rounded-lg transition shadow-lg mt-2">Добавить в базу</button>
+                    <button onclick="confirmAddUser()" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 text-white font-bold py-2.5 rounded-lg">Добавить в базу</button>
                 </div>
             </div>
         </div>
@@ -229,37 +209,30 @@
         <div id="player-stats-modal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm p-4 animate-fade-in">
             <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                 <div class="bg-gray-800 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
-                    <h3 class="text-xl font-bold text-white flex items-center gap-2">
-                        <span>Статистика игрока:</span> <span id="stats-player-name" class="text-purple-400"></span>
-                    </h3>
-                    <button onclick="closePlayerStatsModal()" class="text-gray-400 hover:text-white transition text-xl font-bold">✕</button>
+                    <h3 class="text-xl font-bold text-white flex items-center gap-2"><span>Статистика игрока:</span> <span id="stats-player-name" class="text-purple-400"></span></h3>
+                    <button onclick="closePlayerStatsModal()" class="text-gray-400 hover:text-white text-xl font-bold">✕</button>
                 </div>
-                
                 <div class="p-6 overflow-y-auto custom-scrollbar">
-                    
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
                             <div class="text-xs text-gray-400 uppercase font-bold mb-1">Текущий баланс</div>
                             <div id="stats-balance" class="text-xl font-black text-yellow-400">0 ЭМ</div>
                         </div>
                         <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                            <div class="text-xs text-gray-400 uppercase font-bold mb-1" title="Накопительное значение из базы данных">Потрачено (Всего)</div>
+                            <div class="text-xs text-gray-400 uppercase font-bold mb-1">Потрачено (Всего)</div>
                             <div id="stats-spent-total" class="text-xl font-black text-white">0 ЭМ</div>
                         </div>
-                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 relative group">
-                            <div class="text-xs text-gray-400 uppercase font-bold mb-1 border-b border-dashed border-gray-500 inline-block cursor-help">Потрачено (Логи)</div>
+                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                            <div class="text-xs text-gray-400 uppercase font-bold mb-1">Потрачено (Логи)</div>
                             <div id="stats-spent-logs" class="text-xl font-black text-gray-300">0 ЭМ</div>
-                            <div class="absolute bottom-full left-0 mb-2 w-48 bg-black text-xs text-gray-300 p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none">Сумма всех открытых кейсов из доступной истории логов.</div>
                         </div>
-                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 relative group">
-                            <div class="text-xs text-gray-400 uppercase font-bold mb-1 border-b border-dashed border-gray-500 inline-block cursor-help">Выиграно (Логи)</div>
+                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                            <div class="text-xs text-gray-400 uppercase font-bold mb-1">Выиграно (Логи)</div>
                             <div id="stats-won" class="text-xl font-black text-green-400">0 ЭМ</div>
-                            <div class="absolute bottom-full right-0 mb-2 w-48 bg-black text-xs text-gray-300 p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none">Фактическая стоимость всех выигранных предметов из истории.</div>
                         </div>
-                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 relative group">
-                            <div class="text-xs text-gray-400 uppercase font-bold mb-1 border-b border-dashed border-gray-500 inline-block cursor-help">Профит (Логи)</div>
+                        <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                            <div class="text-xs text-gray-400 uppercase font-bold mb-1">Профит (Логи)</div>
                             <div id="stats-profit" class="text-xl font-black">0 ЭМ</div>
-                            <div class="absolute bottom-full left-0 mb-2 w-48 bg-black text-xs text-gray-300 p-2 rounded shadow-lg opacity-0 group-hover:opacity-100 transition pointer-events-none">Разница между "Выиграно" и "Потрачено" в доступных логах. Плюс - игрок в плюсе.</div>
                         </div>
                         <div class="bg-gray-800 p-4 rounded-xl border border-gray-700">
                             <div class="text-xs text-gray-400 uppercase font-bold mb-1">Сумма пополнений</div>
@@ -274,25 +247,45 @@
                             <div id="stats-best-win" class="text-sm font-bold text-purple-400 truncate">Нет данных</div>
                         </div>
                     </div>
-
                     <h4 class="text-lg font-bold text-white mb-3 border-b border-gray-700 pb-2">История действий (последние 100 логов игрока)</h4>
                     <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-gray-900 border-b border-gray-700">
-                                <tr>
-                                    <th class="px-4 py-2 text-gray-400 font-semibold">Время</th>
-                                    <th class="px-4 py-2 text-gray-400 font-semibold">Действие</th>
-                                    <th class="px-4 py-2 text-gray-400 font-semibold">Детали</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stats-history-list" class="divide-y divide-gray-700/50">
-                                </tbody>
-                        </table>
+                        <table class="w-full text-left text-sm"><tbody id="stats-history-list" class="divide-y divide-gray-700/50"></tbody></table>
                     </div>
                 </div>
             </div>
         </div>
-        
+
+        <div id="catalog-modal" class="hidden fixed inset-0 bg-black/90 z-[200] flex flex-col backdrop-blur-md animate-fade-in">
+            <div class="p-6 bg-gray-900 border-b border-gray-800 flex justify-between items-center shadow-xl z-10">
+                <div>
+                    <h2 class="text-2xl font-black text-white flex items-center gap-3">
+                        📖 Каталог предметов
+                        <span id="catalog-count" class="text-sm font-normal text-gray-400 bg-gray-800 px-3 py-1 rounded-full">Загрузка...</span>
+                    </h2>
+                    <p class="text-gray-400 text-sm mt-1">Выберите предмет для автозаполнения слота в кейсе</p>
+                </div>
+                <button onclick="closeCatalog()" class="text-gray-400 hover:text-white text-3xl font-bold bg-gray-800 hover:bg-gray-700 w-12 h-12 rounded-xl transition">✕</button>
+            </div>
+            
+            <div class="p-6 bg-gray-900 border-b border-gray-800 flex gap-4 z-10">
+                <div class="flex-1 relative">
+                    <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">🔍</div>
+                    <input type="text" id="cat-search" placeholder="Поиск по названию или ID..." class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-12 pr-4 py-3 focus:border-blue-500 outline-none shadow-inner text-lg">
+                </div>
+                <div class="w-64">
+                    <select id="cat-mod" class="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:border-blue-500 outline-none shadow-inner text-lg appearance-none cursor-pointer">
+                        <option value="ALL">Все моды</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 custom-scrollbar relative">
+                <div id="cat-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4">
+                    </div>
+                <div id="cat-empty" class="hidden absolute inset-0 flex items-center justify-center text-gray-500 text-lg font-bold">По запросу ничего не найдено</div>
+            </div>
+        </div>
+
     </div>
 
     <script src="./firebase-config.js"></script>
@@ -302,6 +295,7 @@
         const auth = firebase.auth();
         const db = firebase.database();
         const DB_PATH = 'casino';
+        const ICONS_URL = "https://raw.githubusercontent.com/bogdanshtatskiy-cpu/quests/main/icons/";
 
         let globalUsers = {};
         let globalCases = [];
@@ -309,6 +303,140 @@
         let globalAllLogs = []; 
         let editingCaseIndex = null; 
         let topSpendersChartObj = null;
+
+        // БАЗА ДАННЫХ ПРЕДМЕТОВ
+        let itemsDB = [];
+        let catalogTargetItemIdx = null;
+
+        // Загружаем базу предметов при старте
+        fetch('database.json')
+            .then(r => r.json())
+            .then(data => {
+                itemsDB = data;
+                
+                // Собираем уникальные моды для фильтра
+                let mods = new Set();
+                data.forEach(it => { if(it.mod) mods.add(it.mod); });
+                
+                let select = document.getElementById('cat-mod');
+                Array.from(mods).sort().forEach(mod => {
+                    select.innerHTML += `<option value="${mod}">${mod}</option>`;
+                });
+                
+                document.getElementById('catalog-count').innerText = data.length + " шт.";
+                
+                // Слушатели поиска в каталоге
+                document.getElementById('cat-search').addEventListener('input', renderCatalogItems);
+                document.getElementById('cat-mod').addEventListener('change', renderCatalogItems);
+            })
+            .catch(e => {
+                console.warn("Файл database.json не найден. Каталог будет пуст.");
+                document.getElementById('catalog-count').innerText = "База недоступна";
+            });
+
+        // Функция получения картинки для предмета
+        window.getIconUrl = function(string_id, dmg) {
+            dmg = Number(dmg) || 0;
+            const found = itemsDB.find(i => i.string_id === string_id && i.damage === dmg);
+            if (found && found.image) {
+                return ICONS_URL + found.image;
+            }
+            // Заглушка, если иконка не найдена
+            return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%234b5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Ccircle cx='8.5' cy='8.5' r='1.5'%3E%3C/circle%3E%3Cpolyline points='21 15 16 10 5 21'%3E%3C/polyline%3E%3C/svg%3E";
+        }
+
+        // Обновление иконки при ручном вводе
+        window.updateIconPreview = function(i) {
+            const id = document.getElementById(`ed-id-${i}`).value;
+            const dmg = document.getElementById(`ed-damage-${i}`).value;
+            document.getElementById(`icon-preview-${i}`).src = getIconUrl(id, dmg);
+            
+            // Авто-подтягивание русского имени, если поле пустое или мы хотим его заменить
+            const nameField = document.getElementById(`ed-name-${i}`);
+            if (nameField.value.trim() === "" || nameField.value === "Новый предмет") {
+                const found = itemsDB.find(item => item.string_id === id && item.damage === Number(dmg));
+                if (found && found.name) {
+                    nameField.value = found.name;
+                }
+            }
+        }
+
+        // ================= ЛОГИКА КАТАЛОГА =================
+        window.openCatalog = function(itemIdx) {
+            catalogTargetItemIdx = itemIdx; // Если null - значит добавляем новый (через кнопку +)
+            document.getElementById('catalog-modal').classList.remove('hidden');
+            renderCatalogItems();
+            document.getElementById('cat-search').focus();
+        }
+
+        window.closeCatalog = function() {
+            document.getElementById('catalog-modal').classList.add('hidden');
+            document.getElementById('cat-search').value = '';
+        }
+
+        window.renderCatalogItems = function() {
+            const search = document.getElementById('cat-search').value.toLowerCase();
+            const mod = document.getElementById('cat-mod').value;
+            const grid = document.getElementById('cat-grid');
+            const emptyMsg = document.getElementById('cat-empty');
+            
+            grid.innerHTML = '';
+            
+            let filtered = itemsDB.filter(it => {
+                if (mod !== 'ALL' && it.mod !== mod) return false;
+                if (search) {
+                    return (it.name && it.name.toLowerCase().includes(search)) || 
+                           (it.string_id && it.string_id.toLowerCase().includes(search));
+                }
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                emptyMsg.classList.remove('hidden');
+            } else {
+                emptyMsg.classList.add('hidden');
+                
+                // Рендерим максимум 200 штук за раз, чтобы браузер не лагал от 10000 картинок
+                filtered.slice(0, 200).forEach(it => {
+                    const imgUrl = ICONS_URL + it.image;
+                    // Экранируем кавычки для JS вызова
+                    const safeName = it.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    
+                    grid.innerHTML += `
+                        <div class="bg-gray-800 p-3 rounded-xl border border-gray-700 hover:border-blue-500 hover:bg-gray-750 cursor-pointer transition flex flex-col items-center group shadow-md"
+                             onclick="selectCatalogItem('${it.string_id}', ${it.damage}, '${safeName}')"
+                             title="${it.name}">
+                            <div class="w-16 h-16 flex items-center justify-center mb-3">
+                                <img src="${imgUrl}" loading="lazy" class="max-w-full max-h-full object-contain group-hover:scale-110 transition drop-shadow-lg" onerror="this.src='${getIconUrl('none',0)}'">
+                            </div>
+                            <div class="text-[10px] text-gray-400 text-center w-full truncate font-mono bg-gray-900 rounded px-1 py-0.5">${it.string_id}</div>
+                        </div>
+                    `;
+                });
+                
+                if (filtered.length > 200) {
+                    grid.innerHTML += `<div class="col-span-full text-center text-gray-500 py-4 font-bold">Показано 200 из ${filtered.length}. Воспользуйтесь поиском для уточнения.</div>`;
+                }
+            }
+        }
+
+        window.selectCatalogItem = function(id, dmg, name) {
+            if (catalogTargetItemIdx === null) {
+                // Добавляем новый предмет в кейс
+                if(!globalCases[editingCaseIndex].items) globalCases[editingCaseIndex].items = [];
+                globalCases[editingCaseIndex].items.push({
+                    name: name, id: id, damage: dmg, price: 10, chance: 10, qty: 1
+                });
+                renderCaseEditor(editingCaseIndex);
+            } else {
+                // Подставляем в существующее поле в DOM
+                document.getElementById(`ed-name-${catalogTargetItemIdx}`).value = name;
+                document.getElementById(`ed-id-${catalogTargetItemIdx}`).value = id;
+                document.getElementById(`ed-damage-${catalogTargetItemIdx}`).value = dmg;
+                updateIconPreview(catalogTargetItemIdx);
+            }
+            closeCatalog();
+        }
 
         auth.onAuthStateChanged((user) => {
             if (user) {
@@ -347,81 +475,56 @@
             }
             
             if (tabId === 'cases') {
-                if(editingCaseIndex === null) {
-                    renderCasesGrid();
-                } else {
-                    renderCaseEditor(editingCaseIndex);
-                }
-            } else if (tabId === 'analytics') {
-                updateAnalytics();
-            }
+                if(editingCaseIndex === null) { renderCasesGrid(); } else { renderCaseEditor(editingCaseIndex); }
+            } else if (tabId === 'analytics') { updateAnalytics(); }
         }
 
         function initDataListeners() {
             db.ref(`${DB_PATH}/users`).on('value', (snapshot) => {
                 globalUsers = snapshot.val() || {};
-                renderUsers();
-                updateAnalytics();
+                renderUsers(); updateAnalytics();
             });
 
             db.ref(`${DB_PATH}/data/cases`).on('value', (snapshot) => {
                 globalCases = snapshot.val() || [];
-                if (editingCaseIndex === null) {
-                    renderCasesGrid();
-                }
+                if (editingCaseIndex === null) { renderCasesGrid(); }
                 updateAnalytics();
             });
 
             db.ref(`${DB_PATH}/logs`).on('value', (snapshot) => {
                 const logsRaw = snapshot.val() || {};
                 globalAllLogs = [];
-                for (const key in logsRaw) { 
-                    globalAllLogs.push(logsRaw[key]); 
-                }
-                // Сортировка логов от новых к старым
+                for (const key in logsRaw) { globalAllLogs.push(logsRaw[key]); }
                 globalAllLogs.sort((a,b) => new Date(b.time.replace(/\[|\]/g, '')) - new Date(a.time.replace(/\[|\]/g, '')));
-                
                 globalLogs = globalAllLogs.slice(0, 200); 
-                renderLogs();
-                updateAnalytics();
+                renderLogs(); updateAnalytics();
             });
         }
 
         function updateAnalytics() {
-            let totalSpent = 0;
-            let totalBalances = 0;
-            let totalUsersCount = Object.keys(globalUsers).length;
+            let totalSpent = 0; let totalBalances = 0; let totalUsersCount = Object.keys(globalUsers).length;
             let topSpenders = [];
 
             for (const [name, rawData] of Object.entries(globalUsers)) {
                 let data = rawData;
                 if (typeof rawData === 'string') { try { data = JSON.parse(rawData); } catch(e) { data = { balance: 0, spent: 0 }; } }
-                totalSpent += (data.spent || 0);
-                totalBalances += (data.balance || 0);
+                totalSpent += (data.spent || 0); totalBalances += (data.balance || 0);
                 topSpenders.push({ name: name, spent: data.spent || 0 });
             }
 
             let exactTotalGiven = 0;
-            
             globalAllLogs.forEach(log => {
                 if (log.action === "ВЫИГРЫШ" && log.details) {
                     const match = log.details.match(/Выиграл (.*) \(x(\d+)\) из кейса (.*)/);
                     if (match) {
-                        const itemName = match[1];
-                        const qty = Number(match[2]);
-                        const caseName = match[3];
-
+                        const itemName = match[1]; const qty = Number(match[2]); const caseName = match[3];
                         let itemPrice = 0;
                         let c = globalCases.find(c => c && c.name === caseName);
-                        
                         if (c && c.items) {
-                            // ИЩЕМ СТРОГО ПО ИМЕНИ И КОЛИЧЕСТВУ
                             let fItem = c.items.find(it => it.name === itemName && Number(it.qty) === qty);
-                            if (!fItem) fItem = c.items.find(it => it.name === itemName); // Фоллбэк
-                            if (fItem) { itemPrice = Number(fItem.price) || 0; }
+                            if (!fItem) fItem = c.items.find(it => it.name === itemName);
+                            if (fItem) itemPrice = Number(fItem.price) || 0;
                         }
-                        
-                        // Если кейс удалили, пытаемся найти предмет в других кейсах
                         if (itemPrice === 0) {
                             for (const fallbackCase of globalCases) {
                                 if (fallbackCase && fallbackCase.items) {
@@ -454,69 +557,32 @@
             heroBox.classList.remove('bg-green-600', 'bg-red-600', 'bg-gray-800', 'shadow-green-500/40', 'shadow-red-500/40', 'border-green-400/50', 'border-red-400/50');
             
             if (totalSpent === 0) {
-                heroBox.classList.add('bg-gray-800');
-                heroTitle.innerText = "НЕТ ДАННЫХ";
-                heroTitle.className = "text-5xl md:text-7xl font-black drop-shadow-md tracking-tight text-white";
-                heroSub.innerText = "Ожидание активности игроков";
+                heroBox.classList.add('bg-gray-800'); heroTitle.innerText = "НЕТ ДАННЫХ"; heroTitle.className = "text-5xl md:text-7xl font-black drop-shadow-md tracking-tight text-white"; heroSub.innerText = "Ожидание активности игроков";
             } else if (realCasinoProfit >= 0) {
-                heroBox.classList.add('bg-green-600', 'shadow-lg', 'shadow-green-500/40', 'border-green-400/50');
-                heroTitle.innerText = "+" + realCasinoProfit.toFixed(0) + " ЭМ";
-                heroTitle.className = "text-5xl md:text-7xl font-black drop-shadow-md tracking-tight text-white";
-                heroSub.innerText = "ФАКТИЧЕСКАЯ ЧИСТАЯ ПРИБЫЛЬ КАЗИНО";
+                heroBox.classList.add('bg-green-600', 'shadow-lg', 'shadow-green-500/40', 'border-green-400/50'); heroTitle.innerText = "+" + realCasinoProfit.toFixed(0) + " ЭМ"; heroTitle.className = "text-5xl md:text-7xl font-black drop-shadow-md tracking-tight text-white"; heroSub.innerText = "ФАКТИЧЕСКАЯ ЧИСТАЯ ПРИБЫЛЬ КАЗИНО";
             } else {
-                heroBox.classList.add('bg-red-600', 'shadow-lg', 'shadow-red-500/40', 'border-red-400/50');
-                heroTitle.innerText = realCasinoProfit.toFixed(0) + " ЭМ";
-                heroTitle.className = "text-5xl md:text-7xl font-black drop-shadow-md tracking-tight text-white";
-                heroSub.innerText = "ФАКТИЧЕСКИЙ УБЫТОК КАЗИНО";
+                heroBox.classList.add('bg-red-600', 'shadow-lg', 'shadow-red-500/40', 'border-red-400/50'); heroTitle.innerText = realCasinoProfit.toFixed(0) + " ЭМ"; heroTitle.className = "text-5xl md:text-7xl font-black drop-shadow-md tracking-tight text-white"; heroSub.innerText = "ФАКТИЧЕСКИЙ УБЫТОК КАЗИНО";
             }
 
-            topSpenders.sort((a,b) => b.spent - a.spent);
-            let top10 = topSpenders.slice(0, 10);
-            
+            topSpenders.sort((a,b) => b.spent - a.spent); let top10 = topSpenders.slice(0, 10);
             const ctx = document.getElementById('topSpendersChart').getContext('2d');
             if (topSpendersChartObj) topSpendersChartObj.destroy();
-            
-            topSpendersChartObj = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: top10.map(u => u.name),
-                    datasets: [{
-                        label: 'Потрачено (ЭМ)',
-                        data: top10.map(u => u.spent),
-                        backgroundColor: '#8b5cf6',
-                        borderRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    scales: { y: { beginAtZero: true, grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }, x: { grid: { display: false }, ticks: { color: '#e5e7eb', font: {weight: 'bold'} } } },
-                    plugins: { legend: { display: false } }
-                }
-            });
+            topSpendersChartObj = new Chart(ctx, { type: 'bar', data: { labels: top10.map(u => u.name), datasets: [{ label: 'Потрачено (ЭМ)', data: top10.map(u => u.spent), backgroundColor: '#8b5cf6', borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }, x: { grid: { display: false }, ticks: { color: '#e5e7eb', font: {weight: 'bold'} } } }, plugins: { legend: { display: false } } } });
         }
 
-        // ================= ИГРОКИ (ОБНОВЛЕНИЕ И ДОБАВЛЕНИЕ) =================
         function renderUsers() {
             const list = document.getElementById('users-list');
             list.innerHTML = '';
             for (const [name, rawData] of Object.entries(globalUsers)) {
                 let data = rawData;
                 if (typeof rawData === 'string') { try { data = JSON.parse(rawData); } catch(e) { data = { balance: 0, spent: 0 }; } }
-                const balance = data.balance !== undefined ? data.balance : 0;
-                const spent = data.spent !== undefined ? data.spent : 0;
-                
+                const balance = data.balance !== undefined ? data.balance : 0; const spent = data.spent !== undefined ? data.spent : 0;
                 list.innerHTML += `
                     <tr class="hover:bg-gray-800/50 transition">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-white player-link" onclick="openPlayerStatsModal('${name}')" title="Кликните для подробной статистики">
-                            ${name}
-                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-white player-link" onclick="openPlayerStatsModal('${name}')" title="Кликните для подробной статистики">${name}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${spent} ЭМ</td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <input type="number" id="bal-${name}" value="${balance}" class="w-32 bg-gray-900 text-yellow-400 font-mono font-bold px-3 py-1.5 rounded border border-gray-700 focus:outline-none focus:border-purple-500">
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right">
-                            <button onclick="saveBalance('${name}')" class="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white border border-green-500/50 hover:border-green-500 font-semibold py-1.5 px-4 rounded transition text-sm">Сохранить</button>
-                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap"><input type="number" id="bal-${name}" value="${balance}" class="w-32 bg-gray-900 text-yellow-400 font-mono font-bold px-3 py-1.5 rounded border border-gray-700 focus:outline-none focus:border-purple-500"></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-right"><button onclick="saveBalance('${name}')" class="bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white border border-green-500/50 hover:border-green-500 font-semibold py-1.5 px-4 rounded transition text-sm">Сохранить</button></td>
                     </tr>
                 `;
             }
@@ -524,59 +590,22 @@
 
         window.saveBalance = function(name) {
             let inputVal = document.getElementById(`bal-${name}`).value;
-            let newBal = Number(inputVal);
-            
             let currentData = globalUsers[name] || {};
-            if(typeof currentData === 'string') {
-                try { currentData = JSON.parse(currentData); } catch(e) { currentData = {spent: 0}; }
-            }
-            let spent = currentData.spent || 0;
-
-            db.ref(`${DB_PATH}/users/${name}`).set({ balance: newBal, spent: spent })
-              .then(() => showToast(`Баланс ${name} сохранен!`, 'success'))
-              .catch(e => showToast('Ошибка сохранения', 'error'));
+            if(typeof currentData === 'string') { try { currentData = JSON.parse(currentData); } catch(e) { currentData = {spent: 0}; } }
+            db.ref(`${DB_PATH}/users/${name}`).set({ balance: Number(inputVal), spent: currentData.spent || 0 }).then(() => showToast(`Баланс ${name} сохранен!`, 'success')).catch(e => showToast('Ошибка сохранения', 'error'));
         }
 
-        window.openAddUserModal = function() {
-            document.getElementById('add-user-modal').classList.remove('hidden');
-            document.getElementById('new-user-name').value = '';
-            document.getElementById('new-user-bal').value = '0';
-            setTimeout(() => document.getElementById('new-user-name').focus(), 100);
-        }
-
-        window.closeAddUserModal = function() {
-            document.getElementById('add-user-modal').classList.add('hidden');
-        }
-
+        window.openAddUserModal = function() { document.getElementById('add-user-modal').classList.remove('hidden'); document.getElementById('new-user-name').value = ''; document.getElementById('new-user-bal').value = '0'; setTimeout(() => document.getElementById('new-user-name').focus(), 100); }
+        window.closeAddUserModal = function() { document.getElementById('add-user-modal').classList.add('hidden'); }
         window.confirmAddUser = function() {
-            const name = document.getElementById('new-user-name').value.trim();
-            const bal = Number(document.getElementById('new-user-bal').value) || 0;
-            
-            if (!name) {
-                showToast('Введите никнейм!', 'error');
-                return;
-            }
-            
-            if (globalUsers[name]) {
-                showToast('Игрок с таким ником уже существует!', 'error');
-                return;
-            }
-            
-            db.ref(`${DB_PATH}/users/${name}`).set({
-                balance: bal,
-                spent: 0
-            }).then(() => {
-                closeAddUserModal();
-                showToast(`Игрок ${name} успешно добавлен!`, 'success');
-            }).catch(e => {
-                showToast('Ошибка базы данных', 'error');
-            });
+            const name = document.getElementById('new-user-name').value.trim(); const bal = Number(document.getElementById('new-user-bal').value) || 0;
+            if (!name) { showToast('Введите никнейм!', 'error'); return; }
+            if (globalUsers[name]) { showToast('Игрок с таким ником уже существует!', 'error'); return; }
+            db.ref(`${DB_PATH}/users/${name}`).set({ balance: bal, spent: 0 }).then(() => { closeAddUserModal(); showToast(`Игрок ${name} успешно добавлен!`, 'success'); }).catch(e => showToast('Ошибка базы данных', 'error'));
         }
 
-        // ================= СТАТИСТИКА КОНКРЕТНОГО ИГРОКА =================
         window.openPlayerStatsModal = function(playerName) {
             document.getElementById('stats-player-name').innerText = playerName;
-            
             let uData = globalUsers[playerName];
             if (typeof uData === 'string') { try { uData = JSON.parse(uData); } catch(e) { uData = {balance:0, spent:0}; } }
             if (!uData) uData = {balance:0, spent:0};
@@ -584,47 +613,30 @@
             document.getElementById('stats-balance').innerText = (uData.balance || 0) + ' ЭМ';
             document.getElementById('stats-spent-total').innerText = (uData.spent || 0) + ' ЭМ';
             
-            let totalDeposited = 0;
-            let totalWon = 0;
-            let casesOpened = 0;
-            let spentInLogs = 0;
-            let bestWinItem = "";
-            let bestWinPrice = -1;
-            
+            let totalDeposited = 0; let totalWon = 0; let casesOpened = 0; let spentInLogs = 0; let bestWinItem = ""; let bestWinPrice = -1;
             let playerLogs = [];
             
             globalAllLogs.forEach(log => {
                 if (log.user === playerName) {
                     playerLogs.push(log);
-                    
                     if (log.action === "ПОПОЛНЕНИЕ" && log.details) {
-                        const m = log.details.match(/Зачислено:\s*(\d+(\.\d+)?)/);
-                        if (m) totalDeposited += Number(m[1]);
+                        const m = log.details.match(/Зачислено:\s*(\d+(\.\d+)?)/); if (m) totalDeposited += Number(m[1]);
                     }
-                    
                     if (log.action === "ВЫИГРЫШ" && log.details) {
                         casesOpened++;
                         const match = log.details.match(/Выиграл (.*) \(x(\d+)\) из кейса (.*)/);
                         if (match) {
-                            const itemName = match[1];
-                            const qty = Number(match[2]);
-                            const caseName = match[3];
-
-                            let itemPrice = 0;
-                            let casePrice = 0;
-                            let found = false;
-                            
+                            const itemName = match[1]; const qty = Number(match[2]); const caseName = match[3];
+                            let itemPrice = 0; let casePrice = 0; let found = false;
                             let c = globalCases.find(c => c && c.name === caseName);
                             if (c) {
                                 casePrice = Number(c.price) || 0;
                                 if (c.items) {
-                                    // Жесткий поиск по имени и количеству
                                     let fItem = c.items.find(it => it.name === itemName && Number(it.qty) === qty);
                                     if (!fItem) fItem = c.items.find(it => it.name === itemName);
                                     if (fItem) { itemPrice = Number(fItem.price) || 0; found = true; }
                                 }
                             }
-                            
                             if (!found) {
                                 for (const fallbackCase of globalCases) {
                                     if (fallbackCase && fallbackCase.items) {
@@ -634,33 +646,18 @@
                                     }
                                 }
                             }
-                            
-                            spentInLogs += casePrice;
-                            totalWon += itemPrice;
-                            
-                            if (itemPrice > bestWinPrice) {
-                                bestWinPrice = itemPrice;
-                                bestWinItem = `${itemName} (x${qty}) — ${itemPrice} ЭМ`;
-                            }
+                            spentInLogs += casePrice; totalWon += itemPrice;
+                            if (itemPrice > bestWinPrice) { bestWinPrice = itemPrice; bestWinItem = `${itemName} (x${qty}) — ${itemPrice} ЭМ`; }
                         }
                     }
                 }
             });
             
-            // Вычисляем профит именно по логам, чтобы математика сходилась идеально
             let profit = totalWon - spentInLogs;
             let profitEl = document.getElementById('stats-profit');
-            
-            if (profit > 0) {
-                profitEl.innerText = "+" + profit + " ЭМ";
-                profitEl.className = "text-xl font-black text-green-400";
-            } else if (profit < 0) {
-                profitEl.innerText = profit + " ЭМ";
-                profitEl.className = "text-xl font-black text-red-400";
-            } else {
-                profitEl.innerText = "0 ЭМ";
-                profitEl.className = "text-xl font-black text-gray-400";
-            }
+            if (profit > 0) { profitEl.innerText = "+" + profit + " ЭМ"; profitEl.className = "text-xl font-black text-green-400"; } 
+            else if (profit < 0) { profitEl.innerText = profit + " ЭМ"; profitEl.className = "text-xl font-black text-red-400"; } 
+            else { profitEl.innerText = "0 ЭМ"; profitEl.className = "text-xl font-black text-gray-400"; }
             
             document.getElementById('stats-spent-logs').innerText = spentInLogs + " ЭМ";
             document.getElementById('stats-won').innerText = totalWon + " ЭМ";
@@ -668,160 +665,85 @@
             document.getElementById('stats-cases-opened').innerText = casesOpened + " шт.";
             document.getElementById('stats-best-win').innerText = bestWinPrice > -1 ? bestWinItem : "Нет данных";
             
-            // Рендер истории
-            let histHtml = "";
-            let recentLogs = playerLogs.slice(0, 100);
-            
-            if (recentLogs.length === 0) {
-                histHtml = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500">Нет истории действий в текущих логах</td></tr>`;
-            } else {
+            let histHtml = ""; let recentLogs = playerLogs.slice(0, 100);
+            if (recentLogs.length === 0) { histHtml = `<tr><td colspan="3" class="px-4 py-4 text-center text-gray-500">Нет истории действий в текущих логах</td></tr>`; } 
+            else {
                 recentLogs.forEach(log => {
                     let actionColor = "text-gray-400 bg-gray-800";
                     if(log.action.includes("ВЫИГРЫШ")) actionColor = "text-green-400 bg-green-900/30 border border-green-800";
                     if(log.action.includes("ПОПОЛНЕНИЕ")) actionColor = "text-yellow-400 bg-yellow-900/30 border border-yellow-800";
                     if(log.action.includes("ОШИБКА") || log.action.includes("УДАЛЕН")) actionColor = "text-red-400 bg-red-900/30 border border-red-800";
-
-                    histHtml += `
-                        <tr class="hover:bg-gray-800/80 transition border-b border-gray-700/30 last:border-0">
-                            <td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500 font-mono">${(log.time||"").replace(/\[|\]/g, '')}</td>
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <span class="text-[10px] font-bold px-2 py-1 rounded ${actionColor}">${log.action}</span>
-                            </td>
-                            <td class="px-4 py-3 text-sm text-gray-300 w-full">${log.details}</td>
-                        </tr>
-                    `;
+                    histHtml += `<tr class="hover:bg-gray-800/80 transition border-b border-gray-700/30 last:border-0"><td class="px-4 py-3 whitespace-nowrap text-xs text-gray-500 font-mono">${(log.time||"").replace(/\[|\]/g, '')}</td><td class="px-4 py-3 whitespace-nowrap"><span class="text-[10px] font-bold px-2 py-1 rounded ${actionColor}">${log.action}</span></td><td class="px-4 py-3 text-sm text-gray-300 w-full">${log.details}</td></tr>`;
                 });
             }
             document.getElementById('stats-history-list').innerHTML = histHtml;
-            
             document.getElementById('player-stats-modal').classList.remove('hidden');
         }
+        window.closePlayerStatsModal = function() { document.getElementById('player-stats-modal').classList.add('hidden'); }
 
-        window.closePlayerStatsModal = function() {
-            document.getElementById('player-stats-modal').classList.add('hidden');
-        }
-
-
-        // ================= КЕЙСЫ =================
         function renderCasesGrid() {
-            document.getElementById('cases-grid-view').classList.remove('hidden');
-            document.getElementById('case-editor-view').classList.add('hidden');
-            
-            const grid = document.getElementById('cases-grid');
-            grid.innerHTML = '';
-            
+            document.getElementById('cases-grid-view').classList.remove('hidden'); document.getElementById('case-editor-view').classList.add('hidden');
+            const grid = document.getElementById('cases-grid'); grid.innerHTML = '';
             globalCases.forEach((c, idx) => {
                 if(!c) return;
-                
-                let tChance = 0; let tEV = 0;
-                const items = c.items || [];
+                let tChance = 0; let tEV = 0; const items = c.items || [];
                 items.forEach(i => { tChance += (Number(i.chance)||0); tEV += ((Number(i.price)||0) * (Number(i.chance)||0)); });
-                let ev = tChance > 0 ? (tEV / tChance) : 0;
-                let profitPerOpen = (Number(c.price) || 0) - ev;
-                let pColor = profitPerOpen >= 0 ? 'text-green-400' : 'text-red-400';
-                let pSign = profitPerOpen > 0 ? '+' : '';
-
-                grid.innerHTML += `
-                    <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg hover:border-purple-500/50 transition p-5 flex flex-col justify-between group cursor-pointer" onclick="openCaseEditor(${idx})">
-                        <div>
-                            <div class="flex justify-between items-start mb-3">
-                                <h3 class="text-xl font-bold text-white truncate pr-2 group-hover:text-purple-300 transition">${c.name}</h3>
-                                <span class="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-xs font-bold px-2 py-1 rounded-md shrink-0">${c.price} ЭМ</span>
-                            </div>
-                            <div class="text-sm text-gray-400 mb-4">
-                                Предметов внутри: <span class="text-gray-200 font-bold">${items.length}</span>
-                            </div>
-                            <div class="bg-gray-900/80 rounded p-2 text-xs font-mono border border-gray-700/50 mb-5">
-                                Матожидание профита/открытие:<br>
-                                <span class="font-bold text-sm ${pColor}">${pSign}${profitPerOpen.toFixed(2)} ЭМ</span>
-                            </div>
-                        </div>
-                        <button class="w-full bg-gray-700 group-hover:bg-purple-600 text-white font-bold py-2 rounded-lg transition">Настроить</button>
-                    </div>
-                `;
+                let ev = tChance > 0 ? (tEV / tChance) : 0; let profitPerOpen = (Number(c.price) || 0) - ev;
+                let pColor = profitPerOpen >= 0 ? 'text-green-400' : 'text-red-400'; let pSign = profitPerOpen > 0 ? '+' : '';
+                grid.innerHTML += `<div class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg hover:border-purple-500/50 transition p-5 flex flex-col justify-between group cursor-pointer" onclick="openCaseEditor(${idx})"><div><div class="flex justify-between items-start mb-3"><h3 class="text-xl font-bold text-white truncate pr-2 group-hover:text-purple-300 transition">${c.name}</h3><span class="bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 text-xs font-bold px-2 py-1 rounded-md shrink-0">${c.price} ЭМ</span></div><div class="text-sm text-gray-400 mb-4">Предметов внутри: <span class="text-gray-200 font-bold">${items.length}</span></div><div class="bg-gray-900/80 rounded p-2 text-xs font-mono border border-gray-700/50 mb-5">Матожидание профита/открытие:<br><span class="font-bold text-sm ${pColor}">${pSign}${profitPerOpen.toFixed(2)} ЭМ</span></div></div><button class="w-full bg-gray-700 group-hover:bg-purple-600 text-white font-bold py-2 rounded-lg transition">Настроить</button></div>`;
             });
         }
 
-        window.createNewCase = function() {
-            let newCase = { name: "Новый кейс", price: 100, items: [] };
-            globalCases.push(newCase);
-            db.ref(`${DB_PATH}/data/cases`).set(globalCases).then(() => {
-                openCaseEditor(globalCases.length - 1);
-            });
+        window.createNewCase = function() { globalCases.push({ name: "Новый кейс", price: 100, items: [] }); db.ref(`${DB_PATH}/data/cases`).set(globalCases).then(() => { openCaseEditor(globalCases.length - 1); }); }
+        window.openCaseEditor = function(idx) { editingCaseIndex = idx; renderCaseEditor(idx); }
+        window.closeCaseEditor = function() { editingCaseIndex = null; renderCasesGrid(); }
+        
+        window.addItemToCase = function(caseIdx) { 
+            // Открываем каталог для добавления нового предмета
+            openCatalog(null); 
         }
-
-        window.openCaseEditor = function(idx) {
-            editingCaseIndex = idx;
-            renderCaseEditor(idx);
-        }
-
-        window.closeCaseEditor = function() {
-            editingCaseIndex = null;
-            renderCasesGrid();
-        }
-
-        window.addItemToCase = function(caseIdx) {
-            if(!globalCases[caseIdx].items) globalCases[caseIdx].items = [];
-            globalCases[caseIdx].items.push({ name: "Новый предмет", id: "minecraft:stone", damage: 0, price: 10, chance: 10, qty: 1 });
-            renderCaseEditor(caseIdx);
-        }
-
-        window.deleteItemFromCase = function(caseIdx, itemIdx) {
-            if(confirm("Точно удалить этот предмет?")) {
-                globalCases[caseIdx].items.splice(itemIdx, 1);
-                renderCaseEditor(caseIdx);
-            }
-        }
-
-        window.deleteCase = function(caseIdx) {
-            if(confirm("ВНИМАНИЕ! Вы точно хотите удалить этот кейс навсегда?")) {
-                globalCases.splice(caseIdx, 1);
-                db.ref(`${DB_PATH}/data/cases`).set(globalCases).then(() => {
-                    closeCaseEditor();
-                    showToast('Кейс удален', 'success');
-                });
-            }
-        }
+        
+        window.deleteItemFromCase = function(caseIdx, itemIdx) { if(confirm("Точно удалить этот предмет?")) { globalCases[caseIdx].items.splice(itemIdx, 1); renderCaseEditor(caseIdx); } }
+        window.deleteCase = function(caseIdx) { if(confirm("ВНИМАНИЕ! Вы точно хотите удалить этот кейс навсегда?")) { globalCases.splice(caseIdx, 1); db.ref(`${DB_PATH}/data/cases`).set(globalCases).then(() => { closeCaseEditor(); showToast('Кейс удален', 'success'); }); } }
 
         function renderCaseEditor(idx) {
-            document.getElementById('cases-grid-view').classList.add('hidden');
-            document.getElementById('case-editor-view').classList.remove('hidden');
-            
-            let c = globalCases[idx];
-            if(!c) { closeCaseEditor(); return; }
-
+            document.getElementById('cases-grid-view').classList.add('hidden'); document.getElementById('case-editor-view').classList.remove('hidden');
+            let c = globalCases[idx]; if(!c) { closeCaseEditor(); return; }
             const container = document.getElementById('case-editor-container');
+            let itemsHtml = ''; let items = c.items || [];
             
-            let itemsHtml = '';
-            let items = c.items || [];
-            
-            if (items.length === 0) {
-                itemsHtml = `<tr><td colspan="7" class="py-6 text-center text-gray-500">Предметов пока нет. Нажмите "Добавить предмет".</td></tr>`;
-            } else {
+            if (items.length === 0) { itemsHtml = `<tr><td colspan="8" class="py-6 text-center text-gray-500">Предметов пока нет. Выберите предмет из каталога.</td></tr>`; } 
+            else {
                 items.forEach((item, i) => {
-                    let qty = item.qty || 1;
-                    let sysId = item.id || '';
-                    let dmg = item.damage || 0;
+                    let qty = item.qty || 1; let sysId = item.id || ''; let dmg = item.damage || 0;
+                    // НОВОЕ: Подтягиваем иконку
+                    let iconUrl = getIconUrl(sysId, dmg);
                     
                     itemsHtml += `
                         <tr class="border-b border-gray-800 hover:bg-gray-800/80 transition-colors group">
+                            <td class="py-2 px-2 text-center" title="${item.name}">
+                                <div class="w-10 h-10 bg-gray-900 rounded flex items-center justify-center border border-gray-700 mx-auto cursor-pointer hover:border-blue-500 transition" onclick="openCatalog(${i})">
+                                    <img src="${iconUrl}" id="icon-preview-${i}" loading="lazy" class="max-w-[80%] max-h-[80%] object-contain" onerror="this.src='${getIconUrl('none',0)}'">
+                                </div>
+                            </td>
                             <td class="py-2 pr-2">
                                 <div class="flex items-center gap-2">
                                     <div class="w-1.5 h-full self-stretch rounded-full ${item.chance<5?'bg-yellow-400':item.chance<20?'bg-purple-400':item.chance<60?'bg-blue-400':item.chance<80?'bg-green-400':'bg-gray-500'}"></div>
-                                    <input type="text" id="ed-name-${i}" value="${item.name}" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-purple-500 outline-none" placeholder="Отображаемое имя">
+                                    <input type="text" id="ed-name-${i}" value="${item.name}" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:border-purple-500 outline-none" placeholder="Название">
                                 </div>
                             </td>
                             <td class="py-2 px-2">
-                                <input type="text" id="ed-id-${i}" value="${sysId}" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-300 font-mono outline-none focus:border-purple-500" placeholder="minecraft:stone">
+                                <input type="text" id="ed-id-${i}" value="${sysId}" oninput="updateIconPreview(${i})" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-300 font-mono outline-none focus:border-purple-500">
                             </td>
                             <td class="py-2 px-2">
-                                <input type="number" id="ed-damage-${i}" value="${dmg}" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-300 font-mono outline-none focus:border-purple-500">
+                                <input type="number" id="ed-damage-${i}" value="${dmg}" oninput="updateIconPreview(${i})" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-gray-300 font-mono outline-none focus:border-purple-500">
                             </td>
                             <td class="py-2 px-2"><input type="number" id="ed-price-${i}" value="${item.price}" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-yellow-400 font-mono outline-none focus:border-yellow-500"></td>
                             <td class="py-2 px-2"><input type="number" id="ed-qty-${i}" value="${qty}" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white outline-none focus:border-purple-500"></td>
                             <td class="py-2 px-2"><input type="number" step="0.001" id="ed-chance-${i}" value="${item.chance}" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-blue-300 font-mono outline-none focus:border-blue-500"></td>
-                            <td class="py-2 pl-2 text-center">
-                                <button onclick="deleteItemFromCase(${idx}, ${i})" class="text-gray-500 hover:text-red-500 transition px-2 py-1 bg-gray-900 rounded border border-gray-700 hover:border-red-500">✕</button>
+                            <td class="py-2 pl-2 text-center flex items-center justify-center gap-1 mt-1">
+                                <button onclick="openCatalog(${i})" class="text-blue-400 hover:text-white transition px-2 py-1.5 bg-gray-900 rounded border border-gray-700 hover:border-blue-500 text-xs" title="Выбрать из каталога">🔍</button>
+                                <button onclick="deleteItemFromCase(${idx}, ${i})" class="text-red-400 hover:text-white transition px-2 py-1.5 bg-gray-900 rounded border border-gray-700 hover:border-red-500 text-xs">✕</button>
                             </td>
                         </tr>
                     `;
@@ -848,20 +770,25 @@
                     <div class="p-6">
                         <div class="flex justify-between items-center mb-4">
                             <h3 class="text-lg font-bold text-white">Таблица предметов</h3>
-                            <button onclick="addItemToCase(${idx})" class="bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/50 hover:border-purple-500 text-sm font-bold py-1.5 px-4 rounded-lg transition">+ Добавить предмет</button>
+                            <div class="flex gap-2">
+                                <button onclick="addItemToCase(${idx})" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold py-1.5 px-4 rounded-lg transition shadow flex items-center gap-1">
+                                    <span>🔍 Выбрать из базы</span>
+                                </button>
+                            </div>
                         </div>
                         
                         <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse min-w-[800px]">
+                            <table class="w-full text-left border-collapse min-w-[900px]">
                                 <thead>
                                     <tr class="text-xs text-gray-400 border-b border-gray-700 bg-gray-900/30">
+                                        <th class="pb-2 pt-2 px-2 w-14 font-semibold text-center">Иконка</th>
                                         <th class="pb-2 pt-2 pr-2 font-semibold">Название</th>
                                         <th class="pb-2 pt-2 px-2 w-40 font-semibold">Сист. ID</th>
                                         <th class="pb-2 pt-2 px-2 w-20 font-semibold">Dmg</th>
                                         <th class="pb-2 pt-2 px-2 w-32 font-semibold">Цена слота</th>
                                         <th class="pb-2 pt-2 px-2 w-24 font-semibold">Кол-во</th>
                                         <th class="pb-2 pt-2 px-2 w-32 font-semibold">Шанс (%)</th>
-                                        <th class="pb-2 pt-2 pl-2 w-16 text-center font-semibold">Удал.</th>
+                                        <th class="pb-2 pt-2 pl-2 w-20 text-center font-semibold">Действия</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -873,7 +800,6 @@
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    
                     <div class="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6 flex flex-col h-full">
                         <div class="flex justify-between items-center mb-4">
                             <h4 class="font-bold text-blue-400 text-lg">Тест (1000 открытий)</h4>
@@ -883,19 +809,16 @@
                             <p class="text-gray-500 text-sm text-center my-auto">Нажмите "Запустить" для теста...</p>
                         </div>
                     </div>
-
                     <div class="bg-gray-800 rounded-xl shadow-xl border border-gray-700 p-6 flex flex-col h-fit">
                         <div class="flex items-center justify-between mb-2">
                             <h4 class="font-bold text-yellow-400 text-lg">Советник Smart Curve 🧠</h4>
                         </div>
                         <p class="text-sm text-gray-400 mb-4">Введите желаемую чистую прибыль с 1000 открытий. Алгоритм идеально подберет шансы.</p>
-                        
                         <div class="flex items-center gap-3 mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
                             <label class="text-sm font-bold text-gray-400 whitespace-nowrap">Цель (ЭМ):</label>
                             <input type="number" id="ed-target-profit" value="2000" class="w-full bg-gray-800 text-yellow-400 font-black px-3 py-2 rounded border border-gray-600 focus:outline-none focus:border-yellow-500">
                             <button onclick="adviseChancesUI(${idx})" class="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-5 rounded shadow transition">Расчет</button>
                         </div>
-                        
                         <div id="advice-result-box" class="flex-1"></div>
                     </div>
                 </div>
@@ -903,236 +826,76 @@
         }
 
         window.saveCaseEdits = function(idx) {
-            let c = globalCases[idx];
-            c.name = document.getElementById('ed-case-name').value;
-            c.price = Number(document.getElementById('ed-case-price').value);
-            
+            let c = globalCases[idx]; c.name = document.getElementById('ed-case-name').value; c.price = Number(document.getElementById('ed-case-price').value);
             const items = c.items || [];
             items.forEach((item, i) => {
                 let nInput = document.getElementById(`ed-name-${i}`);
                 if(nInput) {
-                    item.name = nInput.value;
-                    item.id = document.getElementById(`ed-id-${i}`).value;
-                    item.damage = Number(document.getElementById(`ed-damage-${i}`).value) || 0;
-                    item.price = Number(document.getElementById(`ed-price-${i}`).value);
-                    item.qty = Number(document.getElementById(`ed-qty-${i}`).value) || 1;
-                    item.chance = Number(document.getElementById(`ed-chance-${i}`).value);
+                    item.name = nInput.value; item.id = document.getElementById(`ed-id-${i}`).value; item.damage = Number(document.getElementById(`ed-damage-${i}`).value) || 0;
+                    item.price = Number(document.getElementById(`ed-price-${i}`).value); item.qty = Number(document.getElementById(`ed-qty-${i}`).value) || 1; item.chance = Number(document.getElementById(`ed-chance-${i}`).value);
                 }
             });
-
-            db.ref(`${DB_PATH}/data/cases/${idx}`).set(c)
-              .then(() => {
-                  showToast('Кейс успешно сохранен!', 'success');
-                  renderCaseEditor(idx); 
-              })
-              .catch(e => showToast('Ошибка сохранения', 'error'));
+            db.ref(`${DB_PATH}/data/cases/${idx}`).set(c).then(() => { showToast('Кейс успешно сохранен!', 'success'); renderCaseEditor(idx); }).catch(e => showToast('Ошибка сохранения', 'error'));
         }
 
         window.runSimulationUI = function(idx) {
-            const casePrice = Number(document.getElementById('ed-case-price').value);
-            const items = [];
-            let i = 0;
-            while(document.getElementById(`ed-name-${i}`)) {
-                items.push({
-                    name: document.getElementById(`ed-name-${i}`).value,
-                    price: Number(document.getElementById(`ed-price-${i}`).value),
-                    qty: Number(document.getElementById(`ed-qty-${i}`).value) || 1,
-                    chance: Number(document.getElementById(`ed-chance-${i}`).value)
-                });
-                i++;
-            }
-            
+            const casePrice = Number(document.getElementById('ed-case-price').value); const items = []; let i = 0;
+            while(document.getElementById(`ed-name-${i}`)) { items.push({ name: document.getElementById(`ed-name-${i}`).value, price: Number(document.getElementById(`ed-price-${i}`).value), qty: Number(document.getElementById(`ed-qty-${i}`).value) || 1, chance: Number(document.getElementById(`ed-chance-${i}`).value) }); i++; }
             let totalChance = items.reduce((sum, it) => sum + it.chance, 0);
-            if(totalChance <= 0) {
-                document.getElementById('sim-result-box').innerHTML = `<p class="text-red-400 text-sm">Сумма шансов равна нулю!</p>`;
-                return;
-            }
-
-            const numSimulations = 1000;
-            let totalSpentByUser = casePrice * numSimulations;
-            let totalGivenByCasino = 0;
-            
-            let itemStats = {};
-            items.forEach(it => {
-                let displayName = it.name + (it.qty > 1 ? ` x${it.qty}` : '');
-                itemStats[displayName] = { count: 0, val: 0 };
-            });
-
+            if(totalChance <= 0) { document.getElementById('sim-result-box').innerHTML = `<p class="text-red-400 text-sm">Сумма шансов равна нулю!</p>`; return; }
+            const numSimulations = 1000; let totalSpentByUser = casePrice * numSimulations; let totalGivenByCasino = 0; let itemStats = {};
+            items.forEach(it => { let displayName = it.name + (it.qty > 1 ? ` x${it.qty}` : ''); itemStats[displayName] = { count: 0, val: 0 }; });
             for (let j = 0; j < numSimulations; j++) {
-                const randomNum = Math.random() * totalChance;
-                let cumulative = 0;
-                for (const item of items) {
-                    cumulative += item.chance;
-                    if (randomNum <= cumulative) {
-                        totalGivenByCasino += item.price;
-                        let displayName = item.name + (item.qty > 1 ? ` x${item.qty}` : '');
-                        itemStats[displayName].count++;
-                        itemStats[displayName].val += item.price;
-                        break;
-                    }
-                }
+                const randomNum = Math.random() * totalChance; let cumulative = 0;
+                for (const item of items) { cumulative += item.chance; if (randomNum <= cumulative) { totalGivenByCasino += item.price; let displayName = item.name + (item.qty > 1 ? ` x${item.qty}` : ''); itemStats[displayName].count++; itemStats[displayName].val += item.price; break; } }
             }
-
-            const casinoProfit = totalSpentByUser - totalGivenByCasino; 
-            const casinoROI = (casinoProfit / totalSpentByUser) * 100;
-            
+            const casinoProfit = totalSpentByUser - totalGivenByCasino; const casinoROI = (casinoProfit / totalSpentByUser) * 100;
             let sortedItems = Object.keys(itemStats).sort((a,b) => itemStats[b].count - itemStats[a].count);
-            
             let tbody = '';
-            for(let name of sortedItems) {
-                let stat = itemStats[name];
-                if(stat.count > 0) {
-                    tbody += `<tr class="border-b border-gray-800 hover:bg-gray-800/50"><td class="py-1.5 text-gray-300 pr-2">${name}</td><td class="py-1.5 text-center font-mono text-white">${stat.count}</td><td class="py-1.5 text-right text-yellow-400 font-mono">${stat.val.toFixed(0)}</td></tr>`;
-                }
-            }
-
-            document.getElementById('sim-result-box').innerHTML = `
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3 font-mono">
-                    <div class="bg-gray-900/80 p-2 rounded border border-gray-700">Оборот:<br><b class="text-white text-sm">${totalSpentByUser.toFixed(0)} ЭМ</b></div>
-                    <div class="bg-gray-900/80 p-2 rounded border border-gray-700">Выдано:<br><b class="text-white text-sm">${totalGivenByCasino.toFixed(0)} ЭМ</b></div>
-                    <div class="bg-gray-900/80 p-2 rounded border ${casinoProfit>=0?'border-green-900':'border-red-900'}">Профит:<br><b class="text-sm ${casinoProfit>=0?'text-green-400':'text-red-400'}">${casinoProfit>0?'+':''}${casinoProfit.toFixed(0)} ЭМ</b></div>
-                    <div class="bg-gray-900/80 p-2 rounded border ${casinoROI>=0?'border-green-900':'border-red-900'}">Маржа:<br><b class="text-sm ${casinoROI>=0?'text-green-400':'text-red-400'}">${casinoROI>0?'+':''}${casinoROI.toFixed(1)}%</b></div>
-                </div>
-                <div class="flex-1 min-h-[300px] max-h-[600px] overflow-y-auto custom-scrollbar pr-2 mt-2">
-                    <table class="w-full text-left text-xs border-collapse">
-                        <thead class="sticky top-0 bg-gray-900 shadow-sm z-10"><tr class="text-gray-500 uppercase"><th class="pb-2 pt-1">Предмет</th><th class="pb-2 pt-1 text-center">Выпал (раз)</th><th class="pb-2 pt-1 text-right">Сумма (ЭМ)</th></tr></thead>
-                        <tbody>${tbody}</tbody>
-                    </table>
-                </div>
-            `;
+            for(let name of sortedItems) { let stat = itemStats[name]; if(stat.count > 0) { tbody += `<tr class="border-b border-gray-800 hover:bg-gray-800/50"><td class="py-1.5 text-gray-300 pr-2">${name}</td><td class="py-1.5 text-center font-mono text-white">${stat.count}</td><td class="py-1.5 text-right text-yellow-400 font-mono">${stat.val.toFixed(0)}</td></tr>`; } }
+            document.getElementById('sim-result-box').innerHTML = `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3 font-mono"><div class="bg-gray-900/80 p-2 rounded border border-gray-700">Оборот:<br><b class="text-white text-sm">${totalSpentByUser.toFixed(0)} ЭМ</b></div><div class="bg-gray-900/80 p-2 rounded border border-gray-700">Выдано:<br><b class="text-white text-sm">${totalGivenByCasino.toFixed(0)} ЭМ</b></div><div class="bg-gray-900/80 p-2 rounded border ${casinoProfit>=0?'border-green-900':'border-red-900'}">Профит:<br><b class="text-sm ${casinoProfit>=0?'text-green-400':'text-red-400'}">${casinoProfit>0?'+':''}${casinoProfit.toFixed(0)} ЭМ</b></div><div class="bg-gray-900/80 p-2 rounded border ${casinoROI>=0?'border-green-900':'border-red-900'}">Маржа:<br><b class="text-sm ${casinoROI>=0?'text-green-400':'text-red-400'}">${casinoROI>0?'+':''}${casinoROI.toFixed(1)}%</b></div></div><div class="flex-1 min-h-[300px] max-h-[600px] overflow-y-auto custom-scrollbar pr-2 mt-2"><table class="w-full text-left text-xs border-collapse"><thead class="sticky top-0 bg-gray-900 shadow-sm z-10"><tr class="text-gray-500 uppercase"><th class="pb-2 pt-1">Предмет</th><th class="pb-2 pt-1 text-center">Выпал (раз)</th><th class="pb-2 pt-1 text-right">Сумма (ЭМ)</th></tr></thead><tbody>${tbody}</tbody></table></div>`;
         }
 
         window.adviseChancesUI = function(idx) {
-            const casePrice = Number(document.getElementById('ed-case-price').value);
-            const targetTotalProfit = Number(document.getElementById('ed-target-profit').value); 
-            const targetEV = casePrice - (targetTotalProfit / 1000);
-
-            const items = [];
-            let i = 0;
-            while(document.getElementById(`ed-name-${i}`)) {
-                items.push({
-                    name: document.getElementById(`ed-name-${i}`).value,
-                    price: Math.max(0.01, Number(document.getElementById(`ed-price-${i}`).value)),
-                    chanceInputId: `ed-chance-${i}`
-                });
-                i++;
-            }
-
+            const casePrice = Number(document.getElementById('ed-case-price').value); const targetTotalProfit = Number(document.getElementById('ed-target-profit').value); const targetEV = casePrice - (targetTotalProfit / 1000); const items = []; let i = 0;
+            while(document.getElementById(`ed-name-${i}`)) { items.push({ name: document.getElementById(`ed-name-${i}`).value, price: Math.max(0.01, Number(document.getElementById(`ed-price-${i}`).value)), chanceInputId: `ed-chance-${i}` }); i++; }
             const advDiv = document.getElementById('advice-result-box');
             if(items.length < 2) { advDiv.innerHTML = `<div class="text-red-400 text-sm mt-3">Нужно минимум 2 предмета!</div>`; return; }
-
-            let minPrice = Math.min(...items.map(it => it.price));
-            let maxPrice = Math.max(...items.map(it => it.price));
-
+            let minPrice = Math.min(...items.map(it => it.price)); let maxPrice = Math.max(...items.map(it => it.price));
             if (targetEV <= minPrice) { advDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-3 rounded-lg text-sm border border-red-800/50"><b>Невозможно!</b> Самый дешевый предмет стоит ${minPrice} ЭМ. Прибыль ${targetTotalProfit} ЭМ математически недостижима. Снизьте аппетиты или добавьте дешевый мусор.</div>`; return; }
             if (targetEV >= maxPrice) { advDiv.innerHTML = `<div class="text-red-400 bg-red-900/20 p-3 rounded-lg text-sm border border-red-800/50"><b>Невозможно!</b> Самый дорогой предмет стоит ${maxPrice} ЭМ. Игрок гарантированно не сможет окупить кейс.</div>`; return; }
-
-            function getEV(k) {
-                let sumW = 0;
-                let sumWP = 0;
-                for (let it of items) {
-                    let w = Math.pow(it.price, -k);
-                    sumW += w;
-                    sumWP += w * it.price;
-                }
-                return sumWP / sumW;
-            }
-
-            let k_min = -20;
-            let k_max = 20;
-            let best_k = 0;
-
-            for (let step = 0; step < 60; step++) {
-                best_k = (k_min + k_max) / 2;
-                let current_ev = getEV(best_k);
-                if (current_ev > targetEV) {
-                    k_min = best_k;
-                } else {
-                    k_max = best_k;
-                }
-            }
-
-            let sumW = 0;
-            items.forEach(it => {
-                it.weight = Math.pow(it.price, -best_k);
-                sumW += it.weight;
-            });
-
-            let newChancesArray = [];
-            let htmlList = `<ul class="text-sm space-y-1 mt-3 mb-4 max-h-48 overflow-y-auto custom-scrollbar pr-2">`;
-
-            items.forEach((item, index) => {
-                let newC = (item.weight / sumW) * 100;
-                newChancesArray.push(newC.toFixed(3));
-
-                htmlList += `<li class="flex justify-between border-b border-gray-700/50 pb-1">
-                    <span class="text-gray-400 truncate pr-2">${item.name} <span class="text-xs text-gray-500">(${item.price} ЭМ)</span></span>
-                    <span class="font-mono text-yellow-400 whitespace-nowrap">${newC.toFixed(3)}%</span>
-                </li>`;
-            });
+            function getEV(k) { let sumW = 0; let sumWP = 0; for (let it of items) { let w = Math.pow(it.price, -k); sumW += w; sumWP += w * it.price; } return sumWP / sumW; }
+            let k_min = -20; let k_max = 20; let best_k = 0;
+            for (let step = 0; step < 60; step++) { best_k = (k_min + k_max) / 2; let current_ev = getEV(best_k); if (current_ev > targetEV) { k_min = best_k; } else { k_max = best_k; } }
+            let sumW = 0; items.forEach(it => { it.weight = Math.pow(it.price, -best_k); sumW += it.weight; });
+            let newChancesArray = []; let htmlList = `<ul class="text-sm space-y-1 mt-3 mb-4 max-h-48 overflow-y-auto custom-scrollbar pr-2">`;
+            items.forEach((item, index) => { let newC = (item.weight / sumW) * 100; newChancesArray.push(newC.toFixed(3)); htmlList += `<li class="flex justify-between border-b border-gray-700/50 pb-1"><span class="text-gray-400 truncate pr-2">${item.name} <span class="text-xs text-gray-500">(${item.price} ЭМ)</span></span><span class="font-mono text-yellow-400 whitespace-nowrap">${newC.toFixed(3)}%</span></li>`; });
             htmlList += `</ul>`;
-
-            advDiv.innerHTML = `
-                <div class="mt-4 p-4 bg-gray-900 rounded-lg border border-yellow-600/50 shadow-inner">
-                    <div class="text-xs text-yellow-500 mb-1 uppercase tracking-wider font-bold">Оптимальные шансы (Smart Curve):</div>
-                    ${htmlList}
-                    <button onclick="applyAdviceEdits([${newChancesArray}])" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 rounded transition shadow">
-                        Применить шансы
-                    </button>
-                </div>
-            `;
+            advDiv.innerHTML = `<div class="mt-4 p-4 bg-gray-900 rounded-lg border border-yellow-600/50 shadow-inner"><div class="text-xs text-yellow-500 mb-1 uppercase tracking-wider font-bold">Оптимальные шансы (Smart Curve):</div>${htmlList}<button onclick="applyAdviceEdits([${newChancesArray}])" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 rounded transition shadow">Применить шансы</button></div>`;
         }
+        window.applyAdviceEdits = function(chances) { chances.forEach((c, i) => { let el = document.getElementById(`ed-chance-${i}`); if(el) { el.value = c; el.classList.add('bg-green-900/50', 'border-green-500'); setTimeout(() => el.classList.remove('bg-green-900/50', 'border-green-500'), 1500); } }); document.getElementById('advice-result-box').innerHTML = ''; showToast('Шансы изменены! Обязательно сохраните кейс.', 'success'); }
 
-        window.applyAdviceEdits = function(chances) {
-            chances.forEach((c, i) => {
-                let el = document.getElementById(`ed-chance-${i}`);
-                if(el) {
-                    el.value = c;
-                    el.classList.add('bg-green-900/50', 'border-green-500');
-                    setTimeout(() => el.classList.remove('bg-green-900/50', 'border-green-500'), 1500);
-                }
-            });
-            document.getElementById('advice-result-box').innerHTML = '';
-            showToast('Шансы изменены! Обязательно сохраните кейс.', 'success');
-        }
-
-        // ================= ЛОГИ =================
         function renderLogs() {
-            const list = document.getElementById('logs-list');
-            list.innerHTML = '';
+            const list = document.getElementById('logs-list'); list.innerHTML = '';
             globalLogs.forEach(log => {
                 let actionColor = "text-gray-400 bg-gray-800";
                 if(log.action.includes("ВЫИГРЫШ")) actionColor = "text-green-400 bg-green-900/30 border border-green-800";
                 if(log.action.includes("ПОПОЛНЕНИЕ")) actionColor = "text-yellow-400 bg-yellow-900/30 border border-yellow-800";
                 if(log.action.includes("ОШИБКА") || log.action.includes("УДАЛЕН")) actionColor = "text-red-400 bg-red-900/30 border border-red-800";
-
-                list.innerHTML += `
-                    <tr class="hover:bg-gray-800/80 transition">
-                        <td class="px-4 py-2.5 whitespace-nowrap text-xs text-gray-500 font-mono">${(log.time||"").replace(/\[|\]/g, '')}</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap text-sm font-bold text-purple-300">${log.user}</td>
-                        <td class="px-4 py-2.5 whitespace-nowrap">
-                            <span class="text-[10px] font-bold px-2 py-1 rounded ${actionColor}">${log.action}</span>
-                        </td>
-                        <td class="px-4 py-2.5 text-sm text-gray-300 w-full">${log.details}</td>
-                    </tr>
-                `;
+                list.innerHTML += `<tr class="hover:bg-gray-800/80 transition"><td class="px-4 py-2.5 whitespace-nowrap text-xs text-gray-500 font-mono">${(log.time||"").replace(/\[|\]/g, '')}</td><td class="px-4 py-2.5 whitespace-nowrap text-sm font-bold text-purple-300">${log.user}</td><td class="px-4 py-2.5 whitespace-nowrap"><span class="text-[10px] font-bold px-2 py-1 rounded ${actionColor}">${log.action}</span></td><td class="px-4 py-2.5 text-sm text-gray-300 w-full">${log.details}</td></tr>`;
             });
         }
 
         function showToast(message, type) {
             const toast = document.createElement('div');
             toast.className = `fixed bottom-8 right-8 px-6 py-4 rounded-xl shadow-2xl text-white font-bold transition-all duration-300 transform translate-y-10 opacity-0 ${type === 'success' ? 'bg-gradient-to-r from-green-600 to-emerald-600' : 'bg-gradient-to-r from-red-600 to-rose-600'} z-50 border border-white/20`;
-            toast.innerText = message;
-            document.body.appendChild(toast);
+            toast.innerText = message; document.body.appendChild(toast);
             requestAnimationFrame(() => { toast.classList.remove('translate-y-10', 'opacity-0'); });
             setTimeout(() => { toast.classList.add('translate-y-10', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
         }
 
         const style = document.createElement('style');
-        style.innerHTML = `
-            @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-            .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        `;
+        style.innerHTML = `@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }`;
         document.head.appendChild(style);
 
     </script>
