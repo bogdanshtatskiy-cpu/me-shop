@@ -396,7 +396,7 @@ local function casinoTick()
                 component.gpu.setForeground(0xFFFFFF)
                 require("term").clear()
                 print("Программа завершена администратором: " .. currentUser.name)
-                os.exit()
+                error("ADMIN_EXIT") -- <--- ВОТ ТУТ МЫ ГЕНЕРИРУЕМ ВЫХОД ДЛЯ СТОРОЖЕВОГО ПСА
             else
                 showMsg("ОТКАЗ В ДОСТУПЕ", "Только администратор может закрыть программу!", true, 3)
             end
@@ -695,17 +695,17 @@ local function casinoTick()
 end
 
 -- =========================================================================
--- СТОРОЖЕВОЙ ПЕС (WATCHDOG) ЗАПУСКАЕТ ЦИКЛ В БРОНЕ
+-- СТОРОЖЕВОЙ ПЕС С ВСТРОЕННЫМ ВЫХОДОМ
 -- =========================================================================
 while true do
-    local ok, err = pcall(casinoTick) -- В магазине тут shopTick, в обменнике obmenTick
+    local ok, err = pcall(casinoTick)
     if not ok then
         -- ПРОПУСКАЕМ АДМИНА В КОНСОЛЬ:
         if tostring(err):match("ADMIN_EXIT") then
             break -- Разрываем бесконечный цикл и выходим в систему!
         end
         
-        local f = io.open("/home/crash.log", "a")
+        local f = io.open("/home/casino_crash.log", "a")
         if f then 
             f:write(os.date("%Y-%m-%d %H:%M:%S") .. " | FATAL CRASH: " .. tostring(err) .. "\n")
             f:close() 
