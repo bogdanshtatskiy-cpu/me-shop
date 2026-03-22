@@ -48,7 +48,39 @@ function gui.btn(id, x, y, w, h, str, bg, fg)
     gui.buttons[id] = {x=x, y=y, w=w, h=h} 
 end
 
-function gui.drawStatic(user, timer, top3, casinoName, depositPrices)
+-- === НОВОЕ: БЕГУЩАЯ СТРОКА ===
+function gui.drawMarquee(wins_str, offset)
+    local w = rightColX - 1
+    if w <= 0 then return end
+    
+    rect(1, 5, w, 3, gui.COLORS.panel)
+    rect(1, 5, w, 1, gui.COLORS.tileHeader)
+    rect(1, 7, w, 1, gui.COLORS.tileHeader)
+    
+    if not wins_str or wins_str == "" then
+        center(1, 6, w, "НЕТ ИНФОРМАЦИИ О ВЫИГРЫШАХ", gui.COLORS.label, gui.COLORS.panel)
+        return
+    end
+    
+    local len = unicode.len(wins_str)
+    local display_str = ""
+    
+    if len <= w then
+        display_str = wins_str .. string.rep(" ", w - len)
+    else
+        local safe_offset = (offset % len) + 1
+        display_str = unicode.sub(wins_str, safe_offset, safe_offset + w - 1)
+        if unicode.len(display_str) < w then
+            display_str = display_str .. " " .. unicode.sub(wins_str, 1, w - unicode.len(display_str) - 1)
+        end
+    end
+    
+    gpu.setBackground(gui.COLORS.panel)
+    gpu.setForeground(gui.COLORS.warn)
+    gpu.set(1, 6, display_str)
+end
+
+function gui.drawStatic(user, timer, topPlayers, casinoName, depositPrices)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
     rect(1, 1, rightColX - 1, 3, gui.COLORS.panel)
     center(1, 2, rightColX - 1, casinoName or "КАЗИНО", gui.COLORS.energy, gui.COLORS.panel)
@@ -85,7 +117,8 @@ function gui.drawStatic(user, timer, top3, casinoName, depositPrices)
         center(rightColX, rY, rightColW, "СКУПКА ПРЕДМЕТОВ:", gui.COLORS.energy, gui.COLORS.tileHeader)
         rY = rY + 2
         for i, txt in ipairs(dep_texts) do
-            if rY > H - 7 then break end 
+            -- Оставляем больше места под Топ-15
+            if rY > H - 18 then break end 
             if unicode.len(txt) > rightColW - 4 then
                 txt = unicode.sub(txt, 1, rightColW - 7) .. "..."
             end
@@ -95,13 +128,24 @@ function gui.drawStatic(user, timer, top3, casinoName, depositPrices)
         rY = rY + 1
     end
 
+    -- === ОБНОВЛЕННЫЙ ТОП 15 ===
     rect(rightColX, rY, rightColW, 1, gui.COLORS.tileHeader)
-    center(rightColX, rY, rightColW, "ТОП 3 ПО ТРАТАМ:", gui.COLORS.warn, gui.COLORS.tileHeader)
+    center(rightColX, rY, rightColW, "ТОП 15 ИГРОКОВ:", gui.COLORS.warn, gui.COLORS.tileHeader)
     rY = rY + 2
-    if top3 and #top3 > 0 then
-        for i, t in ipairs(top3) do
-            text(rightColX + 2, rY, i .. ". " .. t.name, gui.COLORS.text, gui.COLORS.panel)
-            text(rightColX + rightColW - string.len(tostring(t.spent)) - string.len(CUR) - 3, rY, t.spent .. " " .. CUR, gui.COLORS.warn, gui.COLORS.panel)
+    if topPlayers and #topPlayers > 0 then
+        for i, t in ipairs(topPlayers) do
+            if rY > H - 1 then break end -- Защита от вылезания за экран
+            
+            -- Обрезаем слишком длинные ники
+            local safeName = unicode.sub(t.name, 1, rightColW - 13)
+            text(rightColX + 2, rY, i .. ". " .. safeName, gui.COLORS.text, gui.COLORS.panel)
+            
+            local valStr = tostring(t.spent)
+            if t.spent >= 1000000 then valStr = string.format("%.1fM", t.spent/1000000)
+            elseif t.spent >= 1000 then valStr = string.format("%.1fk", t.spent/1000) end
+            
+            local spentStr = valStr .. " " .. CUR
+            text(rightColX + rightColW - unicode.len(spentStr) - 2, rY, spentStr, gui.COLORS.warn, gui.COLORS.panel)
             rY = rY + 1
         end
     else
@@ -110,7 +154,8 @@ function gui.drawStatic(user, timer, top3, casinoName, depositPrices)
 end
 
 function gui.drawCases(pageItems, page, maxPage)
-    rect(1, 5, rightColX - 1, H - 4, gui.COLORS.bg)
+    -- Опускаем кейсы ниже, чтобы влезла бегущая строка (с 5 на 8)
+    rect(1, 8, rightColX - 1, H - 7, gui.COLORS.bg)
     local margin = 2; local cols = 3;
     local tileW = math.floor((rightColX - (cols + 1) * margin) / cols); local tileH = 8
     local row, col = 0, 0
@@ -118,7 +163,8 @@ function gui.drawCases(pageItems, page, maxPage)
     for _, pItem in ipairs(pageItems) do
         local case = pItem.item
         local id = pItem.origIdx
-        local x = margin + col * (tileW + margin); local y = 5 + row * (tileH + 1)
+        -- Координата Y теперь начинается с 8
+        local x = margin + col * (tileW + margin); local y = 8 + row * (tileH + 1)
         
         rect(x, y, tileW, tileH, gui.COLORS.tileBg)
         center(x, y, tileW, case.name, gui.COLORS.text, gui.COLORS.tileHeader)
@@ -136,6 +182,9 @@ function gui.drawCases(pageItems, page, maxPage)
     center(1, py + 1, rightColX - 1, "Страница " .. page .. " из " .. maxPage, gui.COLORS.text, gui.COLORS.bg)
     if page < maxPage then gui.btn("page_next", rightColX - 16, py, 14, 3, "ВПЕРЕД ->", gui.COLORS.btnActive) end
 end
+
+-- Остальные функции без изменений (drawCaseView, drawTick, drawNotification, drawAdmin, drawEditorModal, drawCaseEditor, drawItemEditor, drawRoulette, checkClick)
+-- Чтобы не занимать место, я не дублирую их тут. Просто ВСТАВЬ их ниже, они не менялись!
 
 function gui.drawCaseView(case)
     gpu.setBackground(gui.COLORS.bg); term.clear(); gui.buttons = {}
@@ -421,7 +470,7 @@ function gui.drawItemEditor(data, isDeposit)
 end
 
 function gui.drawRoulette(strip, strip_pos)
-    gui.buttons = {} -- Отключаем клики по интерфейсу сзади
+    gui.buttons = {} 
     local w, h = gpu.getResolution()
 
     local base_w, base_h = 20, 7
@@ -429,7 +478,6 @@ function gui.drawRoulette(strip, strip_pos)
     local step = 24
     local pointer_x = math.floor(w / 2)
     
-    -- ОПТИМИЗАЦИЯ: Очищаем только полосу рулетки, чтобы избежать лагов term.clear()
     local track_y = math.floor((h - center_h) / 2) - 2
     local track_h = center_h + 4
     
@@ -474,16 +522,13 @@ function gui.drawRoulette(strip, strip_pos)
         elseif item.chance < 80 then rarity_color = config.rarity_colors.common; rarity_text = "ОБЫЧНЫЙ"
         else rarity_color = config.rarity_colors.trash; rarity_text = "ШИРПОТРЕБ" end
 
-        -- НОВЫЙ ДИЗАЙН КАРТОЧЕК
-        rect(item_start_x, item_y, cur_w, cur_h, gui.COLORS.bg) -- Тень
+        rect(item_start_x, item_y, cur_w, cur_h, gui.COLORS.bg)
         
         if dist < 0.3 then
-            -- Центральная карточка (светящаяся рамка)
             rect(item_start_x, item_y, cur_w, cur_h, rarity_color)
             rect(item_start_x + 1, item_y + 1, cur_w - 2, cur_h - 2, gui.COLORS.tileBg)
             center(item_start_x, item_y + 1, cur_w, rarity_text, rarity_color, gui.COLORS.tileBg)
         else
-            -- Обычные карточки в потоке (цветная шапка)
             rect(item_start_x, item_y, cur_w, 2, rarity_color)
             rect(item_start_x, item_y + 2, cur_w, cur_h - 2, gui.COLORS.tileBg)
             center(item_start_x, item_y + 1, cur_w, rarity_text, gui.COLORS.tileBg, rarity_color)
@@ -515,7 +560,6 @@ function gui.drawRoulette(strip, strip_pos)
         center(item_start_x, item_y + cur_h - 2, cur_w, price_str, gui.COLORS.warn, gui.COLORS.tileBg)
     end
     
-    -- Стрелка-указатель поверх всего
     gpu.setBackground(gui.COLORS.panel)
     gpu.setForeground(gui.COLORS.warn)
     center(pointer_x - 1, track_y, 3, "▼", gui.COLORS.good, gui.COLORS.panel)
