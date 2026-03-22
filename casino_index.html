@@ -42,8 +42,8 @@
         </div>
     </div>
 
-    <div id="dashboard" class="hidden flex-1 flex flex-col">
-        <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-50 shadow-md">
+    <div id="dashboard" class="hidden flex-1 flex flex-col relative">
+        <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-40 shadow-md">
             <div class="max-w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center justify-between h-16">
                     <div class="flex items-center">
@@ -75,7 +75,7 @@
             </div>
         </nav>
 
-        <main class="max-w-[95%] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1">
+        <main class="max-w-[95%] w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 relative z-10">
             
             <div id="content-analytics" class="tab-content block animate-fade-in">
                 <div class="flex justify-between items-end mb-6">
@@ -137,7 +137,13 @@
             </div>
 
             <div id="content-users" class="tab-content hidden animate-fade-in">
-                <h2 class="text-2xl font-black mb-6 text-white">База игроков</h2>
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-black text-white">База игроков</h2>
+                    <button onclick="openAddUserModal()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 px-5 rounded-lg shadow transition flex items-center gap-2">
+                        <span>+ Добавить игрока</span>
+                    </button>
+                </div>
+                
                 <div class="bg-gray-800 shadow-xl rounded-xl border border-gray-700 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left">
@@ -195,7 +201,29 @@
                     </div>
                 </div>
             </div>
+            
         </main>
+        
+        <div id="add-user-modal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm p-4 animate-fade-in">
+            <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+                <div class="bg-gray-800 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+                    <h3 class="text-lg font-bold text-white">Новый игрок</h3>
+                    <button onclick="closeAddUserModal()" class="text-gray-400 hover:text-white transition">✕</button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Никнейм в игре</label>
+                        <input type="text" id="new-user-name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-purple-500 outline-none" placeholder="Steve">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Начальный баланс (ЭМ)</label>
+                        <input type="number" id="new-user-bal" value="0" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-yellow-400 font-mono focus:border-yellow-500 outline-none">
+                    </div>
+                    <button onclick="confirmAddUser()" class="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-2.5 rounded-lg transition shadow-lg mt-2">Добавить в базу</button>
+                </div>
+            </div>
+        </div>
+        
     </div>
 
     <script src="./firebase-config.js"></script>
@@ -391,6 +419,7 @@
             });
         }
 
+        // ================= ИГРОКИ (ОБНОВЛЕНИЕ И ДОБАВЛЕНИЕ) =================
         function renderUsers() {
             const list = document.getElementById('users-list');
             list.innerHTML = '';
@@ -415,6 +444,58 @@
             }
         }
 
+        window.saveBalance = function(name) {
+            let inputVal = document.getElementById(`bal-${name}`).value;
+            let newBal = Number(inputVal);
+            
+            let currentData = globalUsers[name] || {};
+            if(typeof currentData === 'string') {
+                try { currentData = JSON.parse(currentData); } catch(e) { currentData = {spent: 0}; }
+            }
+            let spent = currentData.spent || 0;
+
+            db.ref(`${DB_PATH}/users/${name}`).set({ balance: newBal, spent: spent })
+              .then(() => showToast(`Баланс ${name} сохранен!`, 'success'))
+              .catch(e => showToast('Ошибка сохранения', 'error'));
+        }
+
+        window.openAddUserModal = function() {
+            document.getElementById('add-user-modal').classList.remove('hidden');
+            document.getElementById('new-user-name').value = '';
+            document.getElementById('new-user-bal').value = '0';
+            setTimeout(() => document.getElementById('new-user-name').focus(), 100);
+        }
+
+        window.closeAddUserModal = function() {
+            document.getElementById('add-user-modal').classList.add('hidden');
+        }
+
+        window.confirmAddUser = function() {
+            const name = document.getElementById('new-user-name').value.trim();
+            const bal = Number(document.getElementById('new-user-bal').value) || 0;
+            
+            if (!name) {
+                showToast('Введите никнейм!', 'error');
+                return;
+            }
+            
+            if (globalUsers[name]) {
+                showToast('Игрок с таким ником уже существует!', 'error');
+                return;
+            }
+            
+            db.ref(`${DB_PATH}/users/${name}`).set({
+                balance: bal,
+                spent: 0
+            }).then(() => {
+                closeAddUserModal();
+                showToast(`Игрок ${name} успешно добавлен!`, 'success');
+            }).catch(e => {
+                showToast('Ошибка базы данных', 'error');
+            });
+        }
+
+        // ================= КЕЙСЫ =================
         function renderCasesGrid() {
             document.getElementById('cases-grid-view').classList.remove('hidden');
             document.getElementById('case-editor-view').classList.add('hidden');
@@ -474,7 +555,6 @@
 
         window.addItemToCase = function(caseIdx) {
             if(!globalCases[caseIdx].items) globalCases[caseIdx].items = [];
-            // Добавлены поля id и damage по умолчанию
             globalCases[caseIdx].items.push({ name: "Новый предмет", id: "minecraft:stone", damage: 0, price: 10, chance: 10, qty: 1 });
             renderCaseEditor(caseIdx);
         }
@@ -601,7 +681,7 @@
                         <div class="flex items-center justify-between mb-2">
                             <h4 class="font-bold text-yellow-400 text-lg">Советник Smart Curve 🧠</h4>
                         </div>
-                        <p class="text-sm text-gray-400 mb-4">Введите желаемую чистую прибыль с 1000 открытий. Алгоритм идеально подберет шансы: дешевые предметы будут падать часто, а дорогие — очень редко.</p>
+                        <p class="text-sm text-gray-400 mb-4">Введите желаемую чистую прибыль с 1000 открытий. Алгоритм идеально подберет шансы.</p>
                         
                         <div class="flex items-center gap-3 mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
                             <label class="text-sm font-bold text-gray-400 whitespace-nowrap">Цель (ЭМ):</label>
